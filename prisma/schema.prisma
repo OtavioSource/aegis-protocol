@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Company ─────────────────────────────────────────────────────────────────
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  treasuries    Treasury[]
+  agents        Agent[]
+  budgets       Budget[]
+  spendRequests SpendRequest[]
+  auditLogs     AuditLog[]
+
+  @@map("companies")
+}
+
+// ─── Treasury ─────────────────────────────────────────────────────────────────
+
+model Treasury {
+  id              String         @id @default(cuid())
+  companyId       String
+  name            String
+  network         String         @default("devnet")
+  baseCurrency    String         @default("USDC")
+  walletAddress   String         @unique
+  encryptedSecret String
+  status          TreasuryStatus @default(ACTIVE)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agents  Agent[]
+
+  @@map("treasuries")
+}
+
+enum TreasuryStatus {
+  ACTIVE
+  FROZEN
+}
+
+// ─── Agent ───────────────────────────────────────────────────────────────────
+
+model Agent {
+  id               String      @id @default(cuid())
+  companyId        String
+  treasuryId       String?
+  name             String
+  externalAgentId  String?
+  type             String
+  status           AgentStatus @default(ACTIVE)
+  killSwitchActive Boolean     @default(false)
+  ownerName        String?
+  ownerEmail       String?
+  apiKeyHash       String      @unique
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  treasury      Treasury?      @relation(fields: [treasuryId], references: [id])
+  policies      Policy[]
+  budgets       Budget[]
+  spendRequests SpendRequest[]
+  auditLogs     AuditLog[]
+
+  @@map("agents")
+}
+
+enum AgentStatus {
+  ACTIVE
+  DISABLED
+}
+
+// ─── Policy ──────────────────────────────────────────────────────────────────
+
+model Policy {
+  id        String   @id @default(cuid())
+  agentId   String
+  name      String
+  rules     Json
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@map("policies")
+}
+
+// ─── Budget ──────────────────────────────────────────────────────────────────
+
+model Budget {
+  id                  String   @id @default(cuid())
+  companyId           String
+  agentId             String   @unique
+  dailyLimit          Decimal  @db.Decimal(18, 6)
+  monthlyLimit        Decimal  @db.Decimal(18, 6)
+  perTransactionLimit Decimal  @db.Decimal(18, 6)
+  currency            String   @default("USDC")
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agent   Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@map("budgets")
+}
+
+// ─── SpendRequest ─────────────────────────────────────────────────────────────
+
+model SpendRequest {
+  id              String             @id @default(cuid())
+  companyId       String
+  agentId         String
+  actionType      String
+  vendor          String
+  amount          Decimal            @db.Decimal(18, 6)
+  currency        String             @default("USDC")
+  reason          String
+  reference       String?
+  status          SpendRequestStatus @default(PENDING)
+  policyDecision  String?
+  decisionReason  String?
+  matchedRule     String?
+  txSignature     String?
+  explorerUrl     String?
+  metadata        Json               @default("{}")
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  company         Company           @relation(fields: [companyId], references: [id])
+  agent           Agent             @relation(fields: [agentId], references: [id])
+  approvalRequest ApprovalRequest?
+  auditLogs       AuditLog[]
+
+  @@map("spend_requests")
+}
+
+enum SpendRequestStatus {
+  PENDING
+  APPROVED
+  REQUIRES_APPROVAL
+  REJECTED
+  EXECUTED
+  FAILED
+}
+
+// ─── ApprovalRequest ──────────────────────────────────────────────────────────
+
+model ApprovalRequest {
+  id             String         @id @default(cuid())
+  spendRequestId String         @unique
+  approverEmail  String?
+  status         ApprovalStatus @default(PENDING)
+  decisionReason String?
+  decidedAt      DateTime?
+  createdAt      DateTime       @default(now())
+
+  spendRequest SpendRequest @relation(fields: [spendRequestId], references: [id], onDelete: Cascade)
+
+  @@map("approval_requests")
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── AuditLog ─────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  companyId      String
+  agentId        String?
+  spendRequestId String?
+  eventType      String
+  actorType      String
+  actorId        String
+  payload        Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  company      Company       @relation(fields: [companyId], references: [id])
+  agent        Agent?        @relation(fields: [agentId], references: [id])
+  spendRequest SpendRequest? @relation(fields: [spendRequestId], references: [id])
+
+  @@index([companyId, createdAt])
+  @@index([agentId, createdAt])
+  @@index([spendRequestId])
+  @@map("audit_logs")
+}

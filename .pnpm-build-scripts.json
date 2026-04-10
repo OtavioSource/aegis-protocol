@@ -1,0 +1,1 @@
+{ "buildScripts": ["@prisma/client", "@prisma/engines", "bigint-buffer", "bufferutil", "esbuild", "prisma", "utf-8-validate"] }

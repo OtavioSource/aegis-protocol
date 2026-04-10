@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "cd ../.. && pnpm --filter @command-rail/shared build && pnpm --filter @command-rail/web build",
+  "installCommand": "pnpm install",
+  "outputDirectory": ".next"
+}

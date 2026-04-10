@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: command-rail-db
+    environment:
+      POSTGRES_USER: commandrail
+      POSTGRES_PASSWORD: commandrail
+      POSTGRES_DB: commandrail
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U commandrail']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  solana-validator:
+    image: solanalabs/solana:stable
+    container_name: command-rail-solana
+    command: solana-test-validator --rpc-port 8899 --bind-address 0.0.0.0 --quiet
+    ports:
+      - '8899:8899'
+      - '8900:8900'
+    volumes:
+      - solana_ledger:/root/.local/share/solana/install/active_release/bin/test-ledger
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf -X POST http://localhost:8899 -H "Content-Type: application/json" -d ''{"jsonrpc":"2.0","id":1,"method":"getHealth"}'' | grep -q ok']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+volumes:
+  postgres_data:
+  solana_ledger:
