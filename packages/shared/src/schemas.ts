@@ -79,6 +79,44 @@ export const ApprovalDecisionSchema = z.object({
   decisionReason: z.string().min(1).max(500).optional(),
 });
 
+// ─── Vendor ──────────────────────────────────────────────────────────────────
+
+export const CreateVendorSchema = z.object({
+  name: z.string().min(1).max(100),
+  walletAddress: z.string().min(32).max(44), // Solana base58 pubkey length
+  description: z.string().max(300).optional(),
+});
+
+export const UpdateVendorSchema = z.object({
+  walletAddress: z.string().min(32).max(44).optional(),
+  description: z.string().max(300).optional(),
+  status: z.enum(['ACTIVE', 'BLOCKED']).optional(),
+});
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+export const CreateUserSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1).max(100).optional(),
+  password: z.string().min(8).max(100),
+  role: z.enum(['OWNER', 'ADMIN', 'VIEWER']).default('ADMIN'),
+  phone: z.string().optional(),
+  notifyEmail: z.boolean().default(true),
+  notifySms: z.boolean().default(false),
+});
+
+export const UpdateUserSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  phone: z.string().optional(),
+  notifyEmail: z.boolean().optional(),
+  notifySms: z.boolean().optional(),
+});
+
+export const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type CreateCompanyInput = z.infer<typeof CreateCompanySchema>;
@@ -89,3 +127,7 @@ export type AssignPolicyInput = z.infer<typeof AssignPolicySchema>;
 export type CreateBudgetInput = z.infer<typeof CreateBudgetSchema>;
 export type CreateSpendRequestInput = z.infer<typeof CreateSpendRequestSchema>;
 export type ApprovalDecisionInput = z.infer<typeof ApprovalDecisionSchema>;
+export type CreateVendorInput = z.infer<typeof CreateVendorSchema>;
+export type UpdateVendorInput = z.infer<typeof UpdateVendorSchema>;
+export type CreateUserInput = z.infer<typeof CreateUserSchema>;
+export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;

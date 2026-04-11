@@ -2,11 +2,13 @@ import { api, COMPANY_ID } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
 import { KillSwitchButton } from './kill-switch-button';
+import { RegisterAgentButton } from './register-agent-form';
 import Link from 'next/link';
-import { Bot, Plus } from 'lucide-react';
+import { Bot } from 'lucide-react';
 
 type Policy = { id: string; name: string; rules: Record<string, unknown>; active: boolean };
 type Budget = { dailyLimit: number; monthlyLimit: number; perTransactionLimit: number; currency: string };
+type Treasury = { id: string; name: string; walletAddress: string };
 type Agent = {
   id: string;
   name: string;
@@ -22,9 +24,10 @@ type Agent = {
 };
 
 export default async function AgentsPage() {
-  const agents = await api
-    .get<Agent[]>(`/companies/${COMPANY_ID}/agents`)
-    .catch(() => [] as Agent[]);
+  const [agents, treasuries] = await Promise.all([
+    api.get<Agent[]>(`/companies/${COMPANY_ID}/agents`).catch(() => [] as Agent[]),
+    api.get<Treasury[]>(`/companies/${COMPANY_ID}/treasuries`).catch(() => [] as Treasury[]),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -33,10 +36,7 @@ export default async function AgentsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Agents</h1>
           <p className="text-gray-500 mt-1">Registered AI agents with economic autonomy</p>
         </div>
-        <button className="flex items-center gap-2 bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors">
-          <Plus className="h-4 w-4" />
-          Register Agent
-        </button>
+        <RegisterAgentButton companyId={COMPANY_ID} treasuries={treasuries} />
       </div>
 
       {agents.length === 0 ? (

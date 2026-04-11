@@ -1,8 +1,10 @@
-import { api } from '@/lib/api';
+import { api, COMPANY_ID } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardTitle, CardValue } from '@/components/ui/card';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { KillSwitchButton } from '../kill-switch-button';
+import { AssignPolicyButton } from './assign-policy-form';
+import { SetBudgetButton } from './set-budget-form';
 import { Bot, ArrowLeft, ExternalLink, Shield, DollarSign, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -140,9 +142,12 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ ag
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Policy */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Shield className="h-4 w-4 text-violet-500" />
-            <h2 className="font-semibold text-gray-900">Active Policy</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-violet-500" />
+              <h2 className="font-semibold text-gray-900">Active Policy</h2>
+            </div>
+            <AssignPolicyButton agentId={agent.id} hasPolicy={!!policy} />
           </div>
           {policy ? (
             <div className="space-y-2 text-sm">
@@ -199,9 +204,12 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ ag
 
         {/* Budget */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <DollarSign className="h-4 w-4 text-violet-500" />
-            <h2 className="font-semibold text-gray-900">Budget Limits</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-violet-500" />
+              <h2 className="font-semibold text-gray-900">Budget Limits</h2>
+            </div>
+            <SetBudgetButton agentId={agent.id} companyId={COMPANY_ID} hasBudget={!!budget} />
           </div>
           {budget ? (
             <div className="space-y-3 text-sm">

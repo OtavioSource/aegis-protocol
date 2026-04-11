@@ -75,7 +75,7 @@ export default async function ApprovalsPage() {
                   <p className="text-2xl font-bold text-gray-900">
                     {formatCurrency(appr.spendRequest.amount, appr.spendRequest.currency)}
                   </p>
-                  <ApprovalActions approvalId={appr.id} />
+                  <ApprovalActions approvalId={appr.id} spendRequestId={appr.spendRequest.id} />
                 </div>
               </div>
             </div>

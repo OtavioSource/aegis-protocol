@@ -1,0 +1,16 @@
+{
+  "name": "simple-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "dotenv -e .env -- tsx agent.ts"
+  },
+  "dependencies": {
+    "@command-rail/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^8.0.0",
+    "tsx": "^4.19.0"
+  }
+}

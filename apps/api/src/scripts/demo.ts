@@ -167,7 +167,7 @@ async function main() {
 
     // Get the approval request
     const approvals = await apiGet(`/approvals/pending?companyId=${COMPANY_ID}`) as Array<{ id: string }>;
-    const approval = approvals.find((a) => true); // take first pending
+    const approval = approvals[0]; // take first pending
 
     if (approval) {
       const approved = await apiPost(`/approvals/${approval.id}/approve`, {

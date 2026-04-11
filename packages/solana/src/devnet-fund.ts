@@ -1,7 +1,44 @@
 /**
- * Devnet-only utilities for funding treasury wallets with test tokens.
- * NOT for production use — this creates custom SPL tokens for demo purposes.
+ * @file devnet-fund.ts
+ * @package @command-rail/solana
+ *
+ * ═══════════════════════════════════════════════════════════════
+ *  DEVNET FUNDING UTILITIES — DEMO SETUP ONLY
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * ⚠️  NOT FOR PRODUCTION USE. This file creates custom SPL token mints
+ * and mints tokens out of thin air — only valid on devnet/localnet.
+ *
+ * Purpose:
+ *   Enables the demo to work without real USDC or a live faucet.
+ *   Called via POST /companies/:companyId/treasuries/:id/fund-demo.
+ *
+ * Why a custom mint instead of Circle's devnet USDC?
+ *   Circle's devnet USDC faucet is rate-limited and unreliable. All public
+ *   devnet faucets were rate-limited (429) during development. Running a
+ *   local Solana test validator (Docker: solanalabs/solana:stable) combined
+ *   with a custom mint gives unlimited, offline-capable funding.
+ *   The SPL transfer code path is identical regardless of which mint is used.
+ *
+ * Mint persistence strategy:
+ *   Each call to fundTreasuryForDemo() can create a new mint OR reuse one.
+ *   For demo repeatability, DEVNET_DEMO_MINT_ADDRESS should be set in .env
+ *   after the first call. Without it, each call creates a new mint that the
+ *   treasury's existing token accounts don't recognize → transfer failures.
+ *
+ * Why does env var use process.env['SOLANA_RPC_URL'] inline (not imported constant)?
+ *   The DEVNET_RPC_URL constant in constants.ts reads process.env at module
+ *   import time. If this file is imported before dotenv/config runs (e.g., in
+ *   a script), the constant captures the wrong value. Reading inline at
+ *   call time ensures the env var is always fresh and correctly loaded.
+ *
+ * Usage flow:
+ *   1. POST /companies/:id/treasuries/:id/fund-demo → calls fundTreasuryForDemo()
+ *   2. Copy returned mintAddress → set DEVNET_DEMO_MINT_ADDRESS in .env
+ *   3. Restart API server so transferUsdc() picks up the new mint address
+ *   4. All spend request executions now use this mint
  */
+
 import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import {
   createMint,
@@ -11,31 +48,46 @@ import {
 } from '@solana/spl-token';
 import { explorerTxUrl } from './constants.js';
 
+/**
+ * DevnetFundResult — returned by fundTreasuryForDemo() after successful funding.
+ */
 export type DevnetFundResult = {
+  /** The SPL token mint address — save as DEVNET_DEMO_MINT_ADDRESS in .env */
   mintAddress: string;
+  /** SOL airdrop tx signature (or 'skipped-sufficient-balance' if already funded) */
   solSignature: string;
+  /** Token mint tx signature — verifiable on Solana Explorer */
   mintSignature: string;
+  /** How many tokens were minted (in human-readable units) */
   balance: number;
+  /** Direct Solana Explorer link for the mint transaction */
   explorerUrl: string;
 };
 
 /**
- * Fund a treasury wallet with demo tokens on devnet.
+ * fundTreasuryForDemo() — fund a devnet treasury with test tokens.
  *
- * Flow:
- * 1. Airdrop SOL to the treasury wallet (for tx fees)
- * 2. If a mint authority secret is provided, use that mint to mint tokens
- * 3. Otherwise, create a fresh one-time mint using the treasury keypair
+ * Full funding flow:
+ *   1. Check treasury SOL balance — airdrop 1 SOL if below 0.1 SOL threshold
+ *      (SOL is needed for transaction fees and token account rent)
+ *   2. If mintAuthoritySecret is provided, use that keypair as mint authority.
+ *      Otherwise the treasury keypair is its own mint authority.
+ *   3. If existingMintAddress is provided, verify and reuse that mint.
+ *      Otherwise create a fresh SPL mint with 6 decimals (matching USDC).
+ *   4. Get or create the treasury's Associated Token Account for this mint
+ *   5. Mint `amount` tokens to the treasury's token account
  *
- * For production demos, pre-create a persistent mint and pass its authority secret.
+ * @param treasuryWalletAddress — the treasury's public Solana address
+ * @param treasuryEncryptedSecret — base64-encoded keypair secret (from DB)
+ * @param amount — how many tokens to mint (default: 1000; in human units, not micro-units)
+ * @param mintAuthoritySecret — optional: base64-encoded keypair for a persistent mint authority
+ * @param existingMintAddress — optional: reuse an existing mint instead of creating a new one
  */
 export async function fundTreasuryForDemo(params: {
   treasuryWalletAddress: string;
   treasuryEncryptedSecret: string;
   amount?: number;
-  /** Base64-encoded secret key for the mint authority. If omitted, treasury creates its own mint. */
   mintAuthoritySecret?: string;
-  /** Existing mint address to use. If omitted with mintAuthoritySecret, creates a new mint. */
   existingMintAddress?: string;
 }): Promise<DevnetFundResult> {
   const {
@@ -45,11 +97,17 @@ export async function fundTreasuryForDemo(params: {
     existingMintAddress,
   } = params;
 
+  // Read RPC URL inline (not from imported constant) to ensure dotenv has loaded
   const rpcUrl = process.env['SOLANA_RPC_URL'] ?? 'https://api.devnet.solana.com';
   const connection = new Connection(rpcUrl, 'confirmed');
   const treasuryKeypair = Keypair.fromSecretKey(Buffer.from(treasuryEncryptedSecret, 'base64'));
 
-  // 1. Airdrop SOL to treasury if balance is below 0.1 SOL
+  // ─── Step 1: Airdrop SOL if needed ───────────────────────────────────────
+  // The treasury needs SOL to pay for:
+  //   - Transaction fees (~0.000005 SOL per tx)
+  //   - Token account creation rent (~0.002 SOL per account, one-time)
+  // We only airdrop if balance is low — avoids wasting the local validator's
+  // airdrop capacity and keeps the funding idempotent.
   const currentBalance = await connection.getBalance(treasuryKeypair.publicKey);
   let airdropSig = 'skipped-sufficient-balance';
   if (currentBalance < 0.1 * LAMPORTS_PER_SOL) {
@@ -61,12 +119,17 @@ export async function fundTreasuryForDemo(params: {
     await connection.confirmTransaction({ signature: airdropSig, ...latestBlockhash });
   }
 
-  // 2. Determine mint authority keypair
+  // ─── Step 2: Determine mint authority keypair ────────────────────────────
+  // If a separate mint authority is provided (a persistent keypair stored in env),
+  // that authority controls the mint. Otherwise the treasury is self-authorizing.
+  //
+  // Using a separate mint authority is useful for production-style demos where
+  // multiple treasuries need to be funded from the same shared mint.
   const mintAuthorityKeypair = mintAuthoritySecret
     ? Keypair.fromSecretKey(Buffer.from(mintAuthoritySecret, 'base64'))
     : treasuryKeypair;
 
-  // If mint authority has no SOL, airdrop to it too
+  // If the mint authority is a separate account, ensure it has SOL for fees
   if (mintAuthoritySecret) {
     const balance = await connection.getBalance(mintAuthorityKeypair.publicKey);
     if (balance < 0.1 * LAMPORTS_PER_SOL) {
@@ -78,44 +141,53 @@ export async function fundTreasuryForDemo(params: {
         const bh = await connection.getLatestBlockhash();
         await connection.confirmTransaction({ signature: sig, ...bh });
       } catch {
-        // If airdrop fails for authority, treasury may need to cover fees
+        // If airdrop fails for authority, treasury may cover fees — continue anyway
       }
     }
   }
 
-  // 3. Create or use existing mint
+  // ─── Step 3: Create or verify the token mint ─────────────────────────────
+  // If existingMintAddress is set (from DEVNET_DEMO_MINT_ADDRESS env var),
+  // verify the mint still exists on-chain and reuse it. This keeps token
+  // accounts consistent across multiple fund-demo calls.
+  //
+  // If no mint exists, create one with 6 decimal places — matching USDC's
+  // precision so the amounts shown in the dashboard are human-readable.
   let mintAddress: PublicKey;
   if (existingMintAddress) {
     mintAddress = new PublicKey(existingMintAddress);
-    // Verify it exists
-    await getMint(connection, mintAddress);
+    await getMint(connection, mintAddress); // Throws if mint doesn't exist
   } else {
-    // Create a new SPL token mint with 6 decimals (like USDC)
+    // New mint: 6 decimals, no freeze authority (tokens can't be frozen by mint)
     mintAddress = await createMint(
       connection,
-      mintAuthorityKeypair, // payer
-      mintAuthorityKeypair.publicKey, // mint authority
-      null, // no freeze authority
-      6, // 6 decimals
+      mintAuthorityKeypair,              // payer for the createMint transaction
+      mintAuthorityKeypair.publicKey,    // mint authority (can mint more tokens)
+      null,                              // no freeze authority
+      6,                                 // 6 decimal places (USDC standard)
     );
   }
 
-  // 4. Get or create token account for treasury
+  // ─── Step 4: Get or create treasury's token account for this mint ────────
+  // An Associated Token Account (ATA) is the standard derivable token account.
+  // This is where the minted tokens will land. Created if it doesn't exist yet.
   const tokenAccount = await getOrCreateAssociatedTokenAccount(
     connection,
-    treasuryKeypair, // payer
+    treasuryKeypair,          // payer for account creation
     mintAddress,
     treasuryKeypair.publicKey,
   );
 
-  // 5. Mint tokens to treasury
+  // ─── Step 5: Mint tokens to the treasury ─────────────────────────────────
+  // Convert human-readable amount to the SPL base unit (micro-units).
+  // 1000 tokens with 6 decimals = 1,000,000,000 base units.
   const amountInSmallestUnit = Math.round(amount * 1_000_000);
   const mintSig = await mintTo(
     connection,
-    mintAuthorityKeypair, // payer
-    mintAddress,
-    tokenAccount.address,
-    mintAuthorityKeypair, // authority
+    mintAuthorityKeypair,       // payer
+    mintAddress,                // which token to mint
+    tokenAccount.address,       // where to mint them
+    mintAuthorityKeypair,       // authority that can sign the mint instruction
     amountInSmallestUnit,
   );
 
@@ -129,7 +201,20 @@ export async function fundTreasuryForDemo(params: {
 }
 
 /**
- * Generate a new mint authority keypair (run once, store in env).
+ * generateMintAuthority() — create a new keypair to use as a persistent mint authority.
+ *
+ * Run this once during initial demo setup. Store the output:
+ *   - secretBase64 → DEVNET_DEMO_MINT_AUTHORITY_SECRET in .env (keep secret)
+ *   - publicKey → for reference/documentation only
+ *
+ * Having a persistent mint authority allows multiple treasuries to be funded
+ * from the same mint without re-creating it each time.
+ *
+ * @example
+ *   import { generateMintAuthority } from '@command-rail/solana';
+ *   const auth = generateMintAuthority();
+ *   console.log('Public:', auth.publicKey);
+ *   console.log('Secret (save to .env):', auth.secretBase64);
  */
 export function generateMintAuthority(): { publicKey: string; secretBase64: string } {
   const keypair = Keypair.generate();

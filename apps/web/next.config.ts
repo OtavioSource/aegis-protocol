@@ -3,10 +3,8 @@ import path from 'path';
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@command-rail/shared'],
-  experimental: {
-    turbo: {
-      root: path.resolve(__dirname, '../..'),
-    },
+  turbopack: {
+    root: path.resolve(__dirname, '../..'),
   },
 };
 
