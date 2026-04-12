@@ -215,15 +215,15 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ ag
             <div className="space-y-3 text-sm">
               <div className="flex justify-between items-center pb-2 border-b border-gray-100">
                 <span className="text-gray-600">Per transaction</span>
-                <span className="font-semibold">{formatCurrency(budget.perTransactionLimit, budget.currency)}</span>
+                <span className="font-semibold text-gray-900">{formatCurrency(budget.perTransactionLimit, budget.currency)}</span>
               </div>
               <div className="flex justify-between items-center pb-2 border-b border-gray-100">
                 <span className="text-gray-600">Daily limit</span>
-                <span className="font-semibold">{formatCurrency(budget.dailyLimit, budget.currency)}</span>
+                <span className="font-semibold text-gray-900">{formatCurrency(budget.dailyLimit, budget.currency)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Monthly limit</span>
-                <span className="font-semibold">{formatCurrency(budget.monthlyLimit, budget.currency)}</span>
+                <span className="font-semibold text-gray-900">{formatCurrency(budget.monthlyLimit, budget.currency)}</span>
               </div>
             </div>
           ) : (

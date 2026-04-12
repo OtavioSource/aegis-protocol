@@ -48,8 +48,8 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-4 py-4 border-t border-gray-800 space-y-3">
+      {/* Footer — pb-10 gives clearance from the Next.js dev indicator (fixed bottom-left) */}
+      <div className="px-4 pt-4 pb-10 border-t border-gray-800 space-y-3">
         <div>
           <p className="text-xs text-gray-600">Solana Devnet</p>
           <div className="flex items-center gap-1.5 mt-1">

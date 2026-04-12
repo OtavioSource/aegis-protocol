@@ -89,7 +89,7 @@ function RegisterVendorModal({ companyId, onClose }: { companyId: string; onClos
               name="name"
               required
               placeholder="e.g. OpenAI"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
             />
             <p className="text-xs text-gray-400 mt-1">
               Must match the vendor name used in agent spend requests
@@ -116,7 +116,7 @@ function RegisterVendorModal({ companyId, onClose }: { companyId: string; onClos
             <input
               name="description"
               placeholder="e.g. AI inference (GPT-4, embeddings)"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
             />
           </div>
 

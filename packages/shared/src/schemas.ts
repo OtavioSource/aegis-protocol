@@ -25,7 +25,7 @@ export const CreateAgentSchema = z.object({
   externalAgentId: z.string().optional(),
   ownerName: z.string().optional(),
   ownerEmail: z.string().email().optional(),
-  treasuryId: z.string().uuid().optional(),
+  treasuryId: z.string().min(1).optional(),
 });
 
 export const UpdateAgentSchema = z.object({
@@ -54,7 +54,7 @@ export const AssignPolicySchema = z.object({
 // ─── Budget ──────────────────────────────────────────────────────────────────
 
 export const CreateBudgetSchema = z.object({
-  agentId: z.string().uuid(),
+  agentId: z.string().min(1),
   dailyLimit: z.number().positive(),
   monthlyLimit: z.number().positive(),
   perTransactionLimit: z.number().positive(),

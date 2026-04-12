@@ -1,5 +1,6 @@
 import { signIn } from '../../auth';
 import { redirect } from 'next/navigation';
+import { AuthError } from 'next-auth';
 import { Zap, AlertCircle } from 'lucide-react';
 
 type SearchParams = Promise<{ error?: string; callbackUrl?: string }>;
@@ -39,12 +40,21 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
           <form
             action={async (formData: FormData) => {
               'use server';
-              await signIn('credentials', {
-                email: formData.get('email'),
-                password: formData.get('password'),
-                redirectTo: callbackUrl,
-              });
-              redirect(callbackUrl);
+              try {
+                await signIn('credentials', {
+                  email: formData.get('email'),
+                  password: formData.get('password'),
+                  redirectTo: callbackUrl,
+                });
+              } catch (err) {
+                // NextAuth v5 throws AuthError on failed credentials.
+                // NEXT_REDIRECT is not an AuthError — it must be rethrown
+                // so Next.js can perform the redirect on success.
+                if (err instanceof AuthError) {
+                  redirect(`/login?error=${err.type}&callbackUrl=${encodeURIComponent(callbackUrl)}`);
+                }
+                throw err;
+              }
             }}
             className="space-y-4"
           >

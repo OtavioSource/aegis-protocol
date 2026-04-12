@@ -100,7 +100,7 @@ function SetBudgetModal({
               min="0"
               step="0.01"
               placeholder="e.g. 50"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
             />
             <p className="text-xs text-gray-400 mt-1">Maximum amount for any single transaction</p>
           </div>
@@ -116,7 +116,7 @@ function SetBudgetModal({
               min="0"
               step="0.01"
               placeholder="e.g. 200"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
             />
             <p className="text-xs text-gray-400 mt-1">Total the agent can spend per calendar day</p>
           </div>
@@ -132,7 +132,7 @@ function SetBudgetModal({
               min="0"
               step="0.01"
               placeholder="e.g. 2000"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
             />
             <p className="text-xs text-gray-400 mt-1">Total the agent can spend per calendar month</p>
           </div>

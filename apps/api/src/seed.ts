@@ -44,22 +44,28 @@ async function main() {
   console.log('✅ Company:', company.name, `(${company.id})`);
 
   // ─── Treasury ───────────────────────────────────────────────────────────
+  // Check first — avoids creating a new random wallet on every seed run.
+  // Using findFirst by companyId+name so repeated seeds are truly idempotent.
   const treasuryService = new TreasuryService('devnet');
-  const wallet = treasuryService.createWallet();
 
-  const treasury = await prisma.treasury.upsert({
-    where: { walletAddress: wallet.publicKey },
-    update: {},
-    create: {
-      companyId: company.id,
-      name: 'Main Treasury',
-      network: 'devnet',
-      baseCurrency: 'USDC',
-      walletAddress: wallet.publicKey,
-      encryptedSecret: wallet.encryptedSecret,
-      status: 'ACTIVE',
-    },
+  let treasury = await prisma.treasury.findFirst({
+    where: { companyId: company.id, name: 'Main Treasury' },
   });
+
+  if (!treasury) {
+    const wallet = treasuryService.createWallet();
+    treasury = await prisma.treasury.create({
+      data: {
+        companyId: company.id,
+        name: 'Main Treasury',
+        network: 'devnet',
+        baseCurrency: 'USDC',
+        walletAddress: wallet.publicKey,
+        encryptedSecret: wallet.encryptedSecret,
+        status: 'ACTIVE',
+      },
+    });
+  }
   console.log('✅ Treasury:', treasury.walletAddress);
 
   // ─── Vendors with real Solana wallets ────────────────────────────────────

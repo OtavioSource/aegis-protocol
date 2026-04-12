@@ -154,7 +154,7 @@ function RegisterAgentModal({ companyId, treasuries, onClose }: ModalProps) {
                   name="name"
                   required
                   placeholder="e.g. Marketing Bot"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
                 />
               </div>
 
@@ -165,7 +165,7 @@ function RegisterAgentModal({ companyId, treasuries, onClose }: ModalProps) {
                 <select
                   name="type"
                   required
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
                 >
                   {agentTypes.map((t) => (
                     <option key={t} value={t}>{t}</option>
@@ -177,7 +177,7 @@ function RegisterAgentModal({ companyId, treasuries, onClose }: ModalProps) {
                 <label className="block text-xs font-medium text-gray-700 mb-1">Treasury</label>
                 <select
                   name="treasuryId"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
                 >
                   <option value="">None</option>
                   {treasuries.map((t) => (
@@ -191,7 +191,7 @@ function RegisterAgentModal({ companyId, treasuries, onClose }: ModalProps) {
                 <input
                   name="ownerName"
                   placeholder="e.g. Growth Team"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
                 />
               </div>
 
@@ -201,7 +201,7 @@ function RegisterAgentModal({ companyId, treasuries, onClose }: ModalProps) {
                   name="ownerEmail"
                   type="email"
                   placeholder="owner@company.com"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
                 />
               </div>
             </div>
