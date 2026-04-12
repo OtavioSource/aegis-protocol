@@ -1,12 +1,12 @@
 /**
  * @file treasury.ts
- * @package @command-rail/solana
+ * @package @aegis/solana
  *
  * ═══════════════════════════════════════════════════════════════
  *  TREASURY SERVICE — SOLANA WALLET AND SPL TOKEN OPERATIONS
  * ═══════════════════════════════════════════════════════════════
  *
- * This file is the Solana integration core of CommandRail.
+ * This file is the Solana integration core of Aegis Protocol.
  * All blockchain operations are isolated here — no @solana/web3.js
  * or @solana/spl-token imports exist anywhere outside this package.
  *

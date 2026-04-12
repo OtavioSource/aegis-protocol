@@ -6,7 +6,7 @@
  *  USERS — ADMIN USER MANAGEMENT
  * ═══════════════════════════════════════════════════════════════
  *
- * Users are the human admins who manage CommandRail via the dashboard.
+ * Users are the human admins who manage Aegis Protocol via the dashboard.
  * They are completely separate from Agents (AI processes).
  *
  * Authentication flow:
@@ -33,7 +33,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
-import { CreateUserSchema, UpdateUserSchema, LoginSchema } from '@command-rail/shared';
+import { CreateUserSchema, UpdateUserSchema, LoginSchema } from '@aegis/shared';
 
 export async function usersRoutes(app: FastifyInstance) {
   // ─── POST /companies/:companyId/users ─────────────────────────────────────

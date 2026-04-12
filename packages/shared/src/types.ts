@@ -1,13 +1,13 @@
 /**
  * @file types.ts
- * @package @command-rail/shared
+ * @package @aegis/shared
  *
  * ═══════════════════════════════════════════════════════════════
  *  SHARED DOMAIN TYPES — THE CONTRACT BETWEEN ALL PACKAGES
  * ═══════════════════════════════════════════════════════════════
  *
  * This file defines the TypeScript types that flow through every layer
- * of CommandRail: from the REST API → policy engine → Solana adapter → dashboard.
+ * of Aegis Protocol: from the REST API → policy engine → Solana adapter → dashboard.
  *
  * Why a shared package?
  *   Without a shared contract, each package would define its own version of
@@ -15,11 +15,11 @@
  *   This package ensures all packages speak the same language.
  *
  *   The types here are imported by:
- *   - @command-rail/policy-engine: uses PolicyEvaluationInput, PolicyEvaluationResult
- *   - @command-rail/solana: uses TreasuryStatus, SolanaNetwork, Currency
+ *   - @aegis/policy-engine: uses PolicyEvaluationInput, PolicyEvaluationResult
+ *   - @aegis/solana: uses TreasuryStatus, SolanaNetwork, Currency
  *   - apps/api: uses all domain types for route handlers and DB mapping
  *   - apps/web: uses all types for dashboard rendering
- *   - @command-rail/sdk: uses SpendRequest, PolicyDecision for agent SDK
+ *   - @aegis/sdk: uses SpendRequest, PolicyDecision for agent SDK
  *
  * Domain model overview (8 entities):
  *
@@ -193,7 +193,7 @@ export type Budget = {
 };
 
 /**
- * SpendRequest — the central entity of CommandRail.
+ * SpendRequest — the central entity of Aegis Protocol.
  *
  * Created when an AI agent calls POST /spend-requests.
  * Lifecycle: PENDING → APPROVED | REJECTED | REQUIRES_APPROVAL → EXECUTED | FAILED

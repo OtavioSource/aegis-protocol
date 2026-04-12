@@ -1,11 +1,11 @@
 /**
- * CommandRail — Demo Script
+ * Aegis Protocol — Demo Script
  *
  * Simulates an AI agent (Marketing Bot) making economic decisions
- * governed by CommandRail's policy engine + Solana treasury.
+ * governed by Aegis Protocol's policy engine + Solana treasury.
  *
  * Usage:
- *   pnpm --filter @command-rail/api tsx src/scripts/demo.ts
+ *   pnpm --filter @aegis/api tsx src/scripts/demo.ts
  *
  * Make sure the API server is NOT running (this script uses Prisma directly).
  * Or point BASE_URL to a running instance.
@@ -75,7 +75,7 @@ function statusBadge(status: string): string {
 async function main() {
   log('');
   log(`${c.bold}${c.magenta}╔═══════════════════════════════════════════════╗${c.reset}`);
-  log(`${c.bold}${c.magenta}║        CommandRail — Live Demo                ║${c.reset}`);
+  log(`${c.bold}${c.magenta}║        Aegis Protocol — Live Demo                ║${c.reset}`);
   log(`${c.bold}${c.magenta}║  Economic Governance for AI Agents on Solana  ║${c.reset}`);
   log(`${c.bold}${c.magenta}╚═══════════════════════════════════════════════╝${c.reset}`);
   log('');
@@ -87,12 +87,12 @@ async function main() {
   if (!API_KEY || !COMPANY_ID) {
     log('');
     log(`${c.red}Missing DEMO_API_KEY or DEMO_COMPANY_ID env vars.${c.reset}`);
-    log('Run the seed first: pnpm --filter @command-rail/api db:seed');
+    log('Run the seed first: pnpm --filter @aegis/api db:seed');
     process.exit(1);
   }
 
   // ── Check API health ─────────────────────────────────────────────────────
-  header('Connecting to CommandRail API...');
+  header('Connecting to Aegis Protocol API...');
   try {
     const health = await apiGet('/health') as { status: string };
     ok(`API is live — ${BASE_URL}`);

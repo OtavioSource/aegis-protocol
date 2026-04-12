@@ -1,5 +1,5 @@
 /**
- * CommandRail Tool Definitions for Claude tool_use
+ * Aegis Protocol Tool Definitions for Claude tool_use
  *
  * Defines the 3 tools the AI agent can call:
  *   - check_budget     → rail.getBudgetStatus()
@@ -7,7 +7,7 @@
  *   - wait_for_approval → rail.waitForApproval() + rail.execute()
  */
 
-import type { CommandRail } from '@command-rail/sdk';
+import type { Aegis } from '@aegis/sdk';
 import type { Tool } from '@anthropic-ai/sdk/resources/messages.js';
 
 // ─── Tool Definitions (Claude format) ────────────────────────────────────────
@@ -26,7 +26,7 @@ export const toolDefinitions: Tool[] = [
   {
     name: 'purchase_service',
     description:
-      'Purchase a service or data from a vendor. The request is evaluated by the CommandRail policy engine — it may be auto-approved, require human approval, or be rejected. Auto-approved requests are executed immediately on Solana. Returns the request status, decision reason, and transaction details if executed.',
+      'Purchase a service or data from a vendor. The request is evaluated by the Aegis Protocol policy engine — it may be auto-approved, require human approval, or be rejected. Auto-approved requests are executed immediately on Solana. Returns the request status, decision reason, and transaction details if executed.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -110,7 +110,7 @@ function box(lines: string[], color: string) {
 export async function handleToolCall(
   name: string,
   input: Record<string, unknown>,
-  rail: CommandRail,
+  rail: Aegis,
   dashboardUrl: string,
 ): Promise<string> {
   try {

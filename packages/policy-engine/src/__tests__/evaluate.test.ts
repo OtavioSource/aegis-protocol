@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { evaluate } from '../evaluate.js';
-import { AgentStatus, PolicyDecision, Currency } from '@command-rail/shared';
+import { AgentStatus, PolicyDecision, Currency } from '@aegis/shared';
 import type { EvaluationContext } from '../evaluate.js';
 
 function makeCtx(overrides: Partial<EvaluationContext> = {}): EvaluationContext {

@@ -1,13 +1,13 @@
 /**
  * @file enums.ts
- * @package @command-rail/shared
+ * @package @aegis/shared
  *
  * ═══════════════════════════════════════════════════════════════
  *  SHARED ENUMS — STATUS CODES AND EVENT TYPES
  * ═══════════════════════════════════════════════════════════════
  *
- * All enums used across the CommandRail system are defined here and
- * re-exported from the @command-rail/shared package.
+ * All enums used across the Aegis Protocol system are defined here and
+ * re-exported from the @aegis/shared package.
  *
  * Using string enums (ENUM_VALUE = 'ENUM_VALUE') rather than numeric enums
  * because these values are stored as strings in the PostgreSQL DB and appear
@@ -75,7 +75,7 @@ export enum SpendRequestStatus {
 /**
  * PolicyDecision — the three possible outcomes from the policy engine.
  *
- * This is the direct output of evaluate() in @command-rail/policy-engine.
+ * This is the direct output of evaluate() in @aegis/policy-engine.
  * Stored on SpendRequest.policyDecision alongside the operational status.
  *
  * Why separate from SpendRequestStatus?
@@ -180,7 +180,7 @@ export enum ActorType {
  * SolanaNetwork — which Solana network the treasury operates on.
  *
  * DEVNET:  Public Solana test network. Free airdrops, no real value.
- *          CommandRail MVP uses devnet exclusively.
+ *          Aegis Protocol MVP uses devnet exclusively.
  * MAINNET: Production network. Real SOL and USDC. Used post-hackathon.
  */
 export enum SolanaNetwork {
@@ -191,7 +191,7 @@ export enum SolanaNetwork {
 /**
  * Currency — supported payment currencies.
  *
- * USDC: USD Coin — the primary currency for CommandRail payments.
+ * USDC: USD Coin — the primary currency for Aegis Protocol payments.
  *       Chosen for stability (pegged to $1) and wide SPL token support.
  *       On devnet: custom demo mint. On mainnet: Circle's USDC.
  * SOL:  Native Solana token. Supported for future SOL-denominated budgets.

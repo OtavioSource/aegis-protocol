@@ -29,7 +29,7 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
       <div className="px-6 py-5 border-b border-gray-800">
         <div className="flex items-center gap-2">
           <Zap className="h-5 w-5 text-violet-400" />
-          <span className="font-bold text-lg tracking-tight">CommandRail</span>
+          <span className="font-bold text-lg tracking-tight">Aegis Protocol</span>
         </div>
         <p className="text-xs text-gray-500 mt-0.5">Agent Governance</p>
       </div>

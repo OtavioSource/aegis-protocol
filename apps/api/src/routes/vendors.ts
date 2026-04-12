@@ -22,7 +22,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { CreateVendorSchema, UpdateVendorSchema } from '@command-rail/shared';
+import { CreateVendorSchema, UpdateVendorSchema } from '@aegis/shared';
 
 export async function vendorsRoutes(app: FastifyInstance) {
   // ─── POST /companies/:companyId/vendors ───────────────────────────────────

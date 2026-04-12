@@ -12,7 +12,7 @@
  * Architecture decisions:
  *
  *   1. `import 'dotenv/config'` MUST be the first import.
- *      Packages like @command-rail/solana read `process.env['SOLANA_RPC_URL']`
+ *      Packages like @aegis/solana read `process.env['SOLANA_RPC_URL']`
  *      at import time. If dotenv hasn't run yet, they get undefined and fall
  *      back to public devnet — even when running against a local validator.
  *
@@ -122,5 +122,5 @@ export async function buildServer() {
 if (process.env.NODE_ENV !== 'test') {
   const app = await buildServer();
   await app.listen({ port: PORT, host: HOST });
-  console.log(`CommandRail API running on http://localhost:${PORT}`);
+  console.log(`Aegis Protocol API running on http://localhost:${PORT}`);
 }

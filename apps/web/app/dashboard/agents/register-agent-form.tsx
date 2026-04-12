@@ -133,7 +133,7 @@ function RegisterAgentModal({ companyId, treasuries, onClose }: ModalProps) {
               </div>
             </div>
             <p className="text-xs text-gray-500">
-              Use this key as the <code className="bg-gray-100 px-1 rounded">Authorization: Bearer</code> header when the agent calls the CommandRail API.
+              Use this key as the <code className="bg-gray-100 px-1 rounded">Authorization: Bearer</code> header when the agent calls the Aegis Protocol API.
             </p>
             <button
               onClick={onClose}

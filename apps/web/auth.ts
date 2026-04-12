@@ -2,10 +2,10 @@
  * @file auth.ts
  * @package apps/web
  *
- * NextAuth v5 configuration for the CommandRail dashboard.
+ * NextAuth v5 configuration for the Aegis Protocol dashboard.
  *
  * Uses a Credentials provider that validates email/password against
- * the CommandRail API's /auth/login endpoint (which checks bcrypt hashes).
+ * the Aegis Protocol API's /auth/login endpoint (which checks bcrypt hashes).
  *
  * The session stores minimal user data (id, email, name, role) as a JWT.
  * No database adapter needed — the API owns the user record.

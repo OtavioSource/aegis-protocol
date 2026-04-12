@@ -33,13 +33,13 @@ importers:
 
   apps/api:
     dependencies:
-      '@command-rail/policy-engine':
+      '@aegis/policy-engine':
         specifier: workspace:*
         version: link:../../packages/policy-engine
-      '@command-rail/shared':
+      '@aegis/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@command-rail/solana':
+      '@aegis/solana':
         specifier: workspace:*
         version: link:../../packages/solana
       '@fastify/cors':
@@ -97,7 +97,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@command-rail/shared':
+      '@aegis/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       class-variance-authority:
@@ -146,12 +146,12 @@ importers:
 
   examples/ai-agent:
     dependencies:
+      '@aegis/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       '@anthropic-ai/sdk':
         specifier: ^0.39.0
         version: 0.39.0
-      '@command-rail/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
     devDependencies:
       dotenv-cli:
         specifier: ^8.0.0
@@ -162,7 +162,7 @@ importers:
 
   examples/simple-agent:
     dependencies:
-      '@command-rail/sdk':
+      '@aegis/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
     devDependencies:
@@ -175,7 +175,7 @@ importers:
 
   packages/policy-engine:
     dependencies:
-      '@command-rail/shared':
+      '@aegis/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
@@ -191,7 +191,7 @@ importers:
 
   packages/sdk:
     dependencies:
-      '@command-rail/shared':
+      '@aegis/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
@@ -211,7 +211,7 @@ importers:
 
   packages/solana:
     dependencies:
-      '@command-rail/shared':
+      '@aegis/shared':
         specifier: workspace:*
         version: link:../shared
       '@solana/spl-token':

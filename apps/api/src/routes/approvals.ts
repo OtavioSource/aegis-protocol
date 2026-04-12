@@ -43,7 +43,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { ApprovalDecisionSchema, AuditEventType, ActorType } from '@command-rail/shared';
+import { ApprovalDecisionSchema, AuditEventType, ActorType } from '@aegis/shared';
 import { createAuditLog } from '../services/audit.js';
 import { notifyApprovalDecision } from '../services/notify.js';
 

@@ -1,6 +1,6 @@
-import type { SpendRequestStatus, PolicyDecision, Currency } from '@command-rail/shared';
+import type { SpendRequestStatus, PolicyDecision, Currency } from '@aegis/shared';
 
-export type CommandRailOptions = {
+export type AegisOptions = {
   apiKey: string;
   baseUrl: string;
   agentId: string;
@@ -26,10 +26,10 @@ export type SpendRequestResponse = {
 };
 
 /**
- * CommandRail SDK — lightweight HTTP client for AI agents.
+ * Aegis Protocol SDK — lightweight HTTP client for AI agents.
  *
  * @example
- * const rail = new CommandRail({
+ * const rail = new Aegis({
  *   apiKey: 'agent_key_xxx',
  *   baseUrl: 'https://api.commandrail.io',
  *   agentId: 'agt_123',
@@ -42,10 +42,10 @@ export type SpendRequestResponse = {
  *   reason: 'Enrich leads for April campaign',
  * });
  */
-export class CommandRail {
-  private readonly options: CommandRailOptions;
+export class Aegis {
+  private readonly options: AegisOptions;
 
-  constructor(options: CommandRailOptions) {
+  constructor(options: AegisOptions) {
     this.options = options;
   }
 
@@ -62,7 +62,7 @@ export class CommandRail {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: response.statusText }));
-      throw new Error(`CommandRail API error ${response.status}: ${JSON.stringify(error)}`);
+      throw new Error(`Aegis Protocol API error ${response.status}: ${JSON.stringify(error)}`);
     }
 
     return response.json() as Promise<T>;

@@ -1,6 +1,6 @@
 /**
  * @file devnet-fund.ts
- * @package @command-rail/solana
+ * @package @aegis/solana
  *
  * ═══════════════════════════════════════════════════════════════
  *  DEVNET FUNDING UTILITIES — DEMO SETUP ONLY
@@ -211,7 +211,7 @@ export async function fundTreasuryForDemo(params: {
  * from the same mint without re-creating it each time.
  *
  * @example
- *   import { generateMintAuthority } from '@command-rail/solana';
+ *   import { generateMintAuthority } from '@aegis/solana';
  *   const auth = generateMintAuthority();
  *   console.log('Public:', auth.publicKey);
  *   console.log('Secret (save to .env):', auth.secretBase64);

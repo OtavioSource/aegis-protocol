@@ -50,9 +50,9 @@
 
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
-import { CreateSpendRequestSchema, AuditEventType, ActorType, AgentStatus, Currency, PolicyDecision } from '@command-rail/shared';
-import { evaluate } from '@command-rail/policy-engine';
-import { TreasuryService } from '@command-rail/solana';
+import { CreateSpendRequestSchema, AuditEventType, ActorType, AgentStatus, Currency, PolicyDecision } from '@aegis/shared';
+import { evaluate } from '@aegis/policy-engine';
+import { TreasuryService } from '@aegis/solana';
 import { hashApiKey } from '../middleware/auth.js';
 import { createAuditLog } from '../services/audit.js';
 import { notifyApprovalNeeded } from '../services/notify.js';
@@ -109,7 +109,7 @@ export async function spendRequestsRoutes(app: FastifyInstance) {
     const policy = agent.policies[0];
 
     // Step 5: THE POLICY EVALUATION — pure function, no side effects, deterministic.
-    // This is where @command-rail/policy-engine decides APPROVED / REQUIRES_APPROVAL / REJECTED.
+    // This is where @aegis/policy-engine decides APPROVED / REQUIRES_APPROVAL / REJECTED.
     // See packages/policy-engine/src/evaluate.ts for the full rule priority order.
     const evaluationResult = evaluate({
       spendRequest: {

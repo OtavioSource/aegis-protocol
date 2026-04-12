@@ -6,7 +6,7 @@
  *  API KEY AUTHENTICATION — AGENT IDENTITY LAYER
  * ═══════════════════════════════════════════════════════════════
  *
- * CommandRail agents authenticate using API keys in the format:
+ * Aegis Protocol agents authenticate using API keys in the format:
  *   Authorization: Bearer cr_<40-character nanoid>
  *
  * Security design:

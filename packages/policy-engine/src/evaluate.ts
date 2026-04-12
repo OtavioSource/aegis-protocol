@@ -1,6 +1,6 @@
 /**
  * @file evaluate.ts
- * @package @command-rail/policy-engine
+ * @package @aegis/policy-engine
  *
  * ═══════════════════════════════════════════════════════════════
  *  THE CORE OF COMMANDRAIL — POLICY EVALUATION ENGINE
@@ -50,7 +50,7 @@ import {
   PolicyDecision,
   type PolicyEvaluationInput,
   type PolicyEvaluationResult,
-} from '@command-rail/shared';
+} from '@aegis/shared';
 
 /**
  * EvaluationContext — everything the policy engine needs to make a decision.

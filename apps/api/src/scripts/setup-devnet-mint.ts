@@ -4,7 +4,7 @@
  *
  * Usage: pnpm tsx src/scripts/setup-devnet-mint.ts
  */
-import { generateMintAuthority, fundTreasuryForDemo } from '@command-rail/solana';
+import { generateMintAuthority, fundTreasuryForDemo } from '@aegis/solana';
 
 const authority = generateMintAuthority();
 console.log('🔑 Mint Authority generated:');

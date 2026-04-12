@@ -7,7 +7,7 @@
     "start": "dotenv -e .env -- tsx agent.ts"
   },
   "dependencies": {
-    "@command-rail/sdk": "workspace:*"
+    "@aegis/sdk": "workspace:*"
   },
   "devDependencies": {
     "dotenv-cli": "^8.0.0",

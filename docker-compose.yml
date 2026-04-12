@@ -1,24 +1,24 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: command-rail-db
+    container_name: aegis-db
     environment:
-      POSTGRES_USER: commandrail
-      POSTGRES_PASSWORD: commandrail
-      POSTGRES_DB: commandrail
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: aegis
+      POSTGRES_DB: aegis
     ports:
       - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U commandrail']
+      test: ['CMD-SHELL', 'pg_isready -U aegis']
       interval: 5s
       timeout: 5s
       retries: 5
 
   solana-validator:
     image: solanalabs/solana:stable
-    container_name: command-rail-solana
+    container_name: aegis-solana
     command: solana-test-validator --rpc-port 8899 --bind-address 0.0.0.0 --quiet
     ports:
       - '8899:8899'

@@ -1,5 +1,5 @@
 {
-  "name": "@command-rail/api",
+  "name": "@aegis/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,9 +15,9 @@
     "demo": "tsx --env-file=.env src/scripts/demo.ts"
   },
   "dependencies": {
-    "@command-rail/policy-engine": "workspace:*",
-    "@command-rail/shared": "workspace:*",
-    "@command-rail/solana": "workspace:*",
+    "@aegis/policy-engine": "workspace:*",
+    "@aegis/shared": "workspace:*",
+    "@aegis/solana": "workspace:*",
     "@fastify/cors": "^10.0.2",
     "@fastify/sensible": "^6.0.3",
     "@prisma/client": "^6.6.0",

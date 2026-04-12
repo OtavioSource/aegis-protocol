@@ -1,9 +1,9 @@
 /**
- * CommandRail AI Agent Demo — Marketing Campaign Procurement Agent
+ * Aegis Protocol AI Agent Demo — Marketing Campaign Procurement Agent
  *
  * A real AI agent (Claude claude-sonnet-4-6) that autonomously plans and executes
  * procurement for a marketing campaign, with every spend decision governed
- * by CommandRail policy engine and settled on Solana devnet.
+ * by Aegis Protocol policy engine and settled on Solana devnet.
  *
  * Scenarios demonstrated:
  *   1. Budget check — agent knows its limits before spending
@@ -24,7 +24,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { CommandRail } from '@command-rail/sdk';
+import { Aegis } from '@aegis/sdk';
 import type {
   MessageParam,
   ToolUseBlock,
@@ -62,7 +62,7 @@ const c = {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
-const rail = new CommandRail({
+const rail = new Aegis({
   apiKey: API_KEY,
   agentId: AGENT_ID,
   baseUrl: API_URL,
@@ -110,7 +110,7 @@ const USER_PROMPT =
 
 async function run() {
   console.log('\n' + '═'.repeat(62));
-  console.log(`${c.bold}${c.violet}  CommandRail — Marketing Campaign Procurement Agent${c.reset}`);
+  console.log(`${c.bold}${c.violet}  Aegis Protocol — Marketing Campaign Procurement Agent${c.reset}`);
   console.log('═'.repeat(62));
   console.log(`  Mode:     ${useMock ? `${c.yellow}MOCK (pre-scripted)${c.reset}` : `${c.cyan}LIVE (Claude claude-sonnet-4-6)${c.reset}`}`);
   console.log(`  Agent ID: ${c.dim}${AGENT_ID}${c.reset}`);

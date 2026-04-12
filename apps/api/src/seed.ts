@@ -24,7 +24,7 @@ import { PrismaClient } from '@prisma/client';
 import { createHash } from 'crypto';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
-import { TreasuryService } from '@command-rail/solana';
+import { TreasuryService } from '@aegis/solana';
 
 const prisma = new PrismaClient();
 
@@ -33,7 +33,7 @@ function hashApiKey(key: string) {
 }
 
 async function main() {
-  console.log('🌱 Seeding CommandRail demo data...\n');
+  console.log('🌱 Seeding Aegis Protocol demo data...\n');
 
   // ─── Company ────────────────────────────────────────────────────────────
   const company = await prisma.company.upsert({
@@ -199,12 +199,12 @@ async function main() {
   });
 
   // ─── Admin User ──────────────────────────────────────────────────────────
-  const defaultPassword = 'commandrail';
+  const defaultPassword = 'aegis';
   const passwordHash = await bcrypt.hash(defaultPassword, 12);
 
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@acme.com' },
-    update: {},
+    update: { passwordHash },
     create: {
       companyId: company.id,
       email: 'admin@acme.com',
@@ -226,7 +226,7 @@ async function main() {
   console.log(`DEMO_COMPANY_ID=${company.id}`);
   console.log('\nDashboard login:');
   console.log('  Email:    admin@acme.com');
-  console.log('  Password: commandrail');
+  console.log('  Password: aegis');
   console.log('\nTreasury wallet:', treasury.walletAddress);
   console.log('(Run POST /companies/' + company.id + '/treasuries/' + treasury.id + '/fund-demo to fund it)');
   console.log('\n📌 Marketing Bot API Key:', marketingKey);

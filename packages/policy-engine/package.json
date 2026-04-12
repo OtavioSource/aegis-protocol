@@ -1,5 +1,5 @@
 {
-  "name": "@command-rail/policy-engine",
+  "name": "@aegis/policy-engine",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -19,7 +19,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@command-rail/shared": "workspace:*"
+    "@aegis/shared": "workspace:*"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.1.1",

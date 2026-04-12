@@ -1,7 +1,7 @@
 /**
- * CommandRail Simple Agent Demo
+ * Aegis Protocol Simple Agent Demo
  *
- * A standalone TypeScript script that demonstrates the full CommandRail
+ * A standalone TypeScript script that demonstrates the full Aegis Protocol
  * governance flow without requiring an LLM. Useful for quick integration
  * testing and understanding the SDK API.
  *
@@ -18,10 +18,10 @@
  * Environment variables:
  *   DEMO_API_KEY    — API key from seed output (cr_xxx)
  *   DEMO_AGENT_ID   — Agent ID from seed output
- *   API_URL         — CommandRail API URL (default: http://localhost:3001)
+ *   API_URL         — Aegis Protocol API URL (default: http://localhost:3001)
  */
 
-import { CommandRail } from '@command-rail/sdk';
+import { Aegis } from '@aegis/sdk';
 
 const API_KEY = process.env.DEMO_API_KEY;
 const AGENT_ID = process.env.DEMO_AGENT_ID;
@@ -32,7 +32,7 @@ if (!API_KEY || !AGENT_ID) {
   process.exit(1);
 }
 
-const rail = new CommandRail({
+const rail = new Aegis({
   apiKey: API_KEY,
   agentId: AGENT_ID,
   baseUrl: API_URL,
@@ -159,7 +159,7 @@ async function scenario4() {
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log('CommandRail Simple Agent Demo');
+  console.log('Aegis Protocol Simple Agent Demo');
   console.log('==============================');
   console.log(`API:      ${API_URL}`);
   console.log(`Agent ID: ${AGENT_ID}`);

@@ -9,11 +9,11 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-violet-400" />
-            <span className="font-bold text-lg tracking-tight">CommandRail</span>
+            <span className="font-bold text-lg tracking-tight">Aegis Protocol</span>
           </div>
           <div className="flex items-center gap-4">
             <a
-              href="https://github.com/command-rail/command-rail"
+              href="https://github.com/aegis-protocol/aegis-protocol"
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
@@ -41,7 +41,7 @@ export default function LandingPage() {
           <span className="text-violet-400">for AI agents</span>
         </h1>
         <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8 leading-relaxed">
-          CommandRail is the control plane between your AI agents and your treasury.
+          Aegis Protocol is the control plane between your AI agents and your treasury.
           Agents request spend. Policies decide. Solana executes. Everything is audited.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -91,7 +91,7 @@ export default function LandingPage() {
       {/* Demo scenarios */}
       <section className="py-20 max-w-6xl mx-auto px-6">
         <h2 className="text-3xl font-bold text-center mb-4">Demo scenarios</h2>
-        <p className="text-gray-400 text-center mb-12">See CommandRail in action with a Marketing Bot agent</p>
+        <p className="text-gray-400 text-center mb-12">See Aegis Protocol in action with a Marketing Bot agent</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
             {
@@ -190,7 +190,7 @@ export default function LandingPage() {
       <footer className="border-t border-gray-800 py-8 px-6 text-center text-sm text-gray-600">
         <div className="flex items-center justify-center gap-2 mb-2">
           <Zap className="h-4 w-4 text-violet-600" />
-          <span className="font-semibold text-gray-500">CommandRail</span>
+          <span className="font-semibold text-gray-500">Aegis Protocol</span>
         </div>
         <p>Submitted to the Solana Frontier Hackathon · 2026</p>
       </footer>

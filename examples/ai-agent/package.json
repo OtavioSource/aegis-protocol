@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "@command-rail/sdk": "workspace:*"
+    "@aegis/sdk": "workspace:*"
   },
   "devDependencies": {
     "dotenv-cli": "^8.0.0",

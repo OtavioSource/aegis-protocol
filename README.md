@@ -1,4 +1,4 @@
-# CommandRail
+# Aegis Protocol
 
 **Economic governance layer for AI agents with programmable treasury on Solana.**
 
@@ -12,7 +12,7 @@ Companies want to give AI agents economic autonomy (pay for APIs, buy datasets, 
 
 ## The Solution
 
-CommandRail is an **economic control plane**. Agents submit spend requests. Policies evaluate them. CommandRail approves, rejects, or escalates for human review. Solana executes. Everything is audited.
+Aegis Protocol is an **economic control plane**. Agents submit spend requests. Policies evaluate them. Aegis Protocol approves, rejects, or escalates for human review. Solana executes. Everything is audited.
 
 ```
 Agent requests spend → Policy evaluates → System decides → Action is audited → Treasury executes
@@ -36,7 +36,7 @@ Agent requests spend → Policy evaluates → System decides → Action is audit
 ## Architecture
 
 ```
-command-rail/
+aegis-protocol/
 ├── apps/
 │   ├── api/          # Fastify REST API — governance + treasury orchestration
 │   └── web/          # Next.js 16 dashboard — approvals, agents, audit log
@@ -97,16 +97,16 @@ command-rail/
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/command-rail/command-rail
-cd command-rail
+git clone https://github.com/aegis-protocol/aegis-protocol
+cd aegis-protocol
 pnpm install
 
 # 2. Start database + Solana validator
 docker compose up -d
 
 # 3. Run migrations and seed demo data
-pnpm --filter @command-rail/api db:migrate
-pnpm --filter @command-rail/api db:seed
+pnpm --filter @aegis-protocol/api db:migrate
+pnpm --filter @aegis-protocol/api db:seed
 
 # 4. Configure environment — copy apps/api/.env.example to apps/api/.env
 # Fill in DEMO_API_KEY and DEMO_COMPANY_ID from seed output
@@ -119,7 +119,7 @@ curl -X POST http://localhost:3001/companies/$COMPANY_ID/treasuries/$TREASURY_ID
 pnpm dev
 
 # 7. Run the animated demo
-pnpm --filter @command-rail/api demo
+pnpm --filter @aegis-protocol/api demo
 ```
 
 **Dashboard:** http://localhost:3000  
@@ -173,11 +173,11 @@ GET /companies/:id/audit-logs
 ## SDK (for AI agents)
 
 ```typescript
-import { CommandRail } from '@command-rail/sdk';
+import { Aegis Protocol } from '@aegis-protocol/sdk';
 
-const rail = new CommandRail({
+const rail = new Aegis Protocol({
   apiKey: 'cr_your_api_key',
-  baseUrl: 'https://api.commandrail.io',
+  baseUrl: 'https://api.aegis.io',
 });
 
 // Request a spend — policy evaluated automatically
@@ -212,10 +212,10 @@ const request = await rail.requestSpend({
 
 ```bash
 # Policy engine unit tests (17 tests)
-pnpm --filter @command-rail/policy-engine test
+pnpm --filter @aegis-protocol/policy-engine test
 
 # Full E2E demo
-pnpm --filter @command-rail/api demo
+pnpm --filter @aegis-protocol/api demo
 ```
 
 ---

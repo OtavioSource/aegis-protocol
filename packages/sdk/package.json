@@ -1,5 +1,5 @@
 {
-  "name": "@command-rail/sdk",
+  "name": "@aegis/sdk",
   "version": "0.1.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,7 +15,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@command-rail/shared": "workspace:*"
+    "@aegis/shared": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.3"

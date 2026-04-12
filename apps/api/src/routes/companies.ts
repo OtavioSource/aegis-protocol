@@ -6,7 +6,7 @@
  *  COMPANIES & TREASURIES — TENANT SETUP ROUTES
  * ═══════════════════════════════════════════════════════════════
  *
- * CommandRail is multi-tenant. A Company is the top-level organizational
+ * Aegis Protocol is multi-tenant. A Company is the top-level organizational
  * unit — everything (agents, treasuries, spend requests, audit logs) belongs
  * to a company.
  *
@@ -47,9 +47,9 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { CreateCompanySchema, CreateTreasurySchema } from '@command-rail/shared';
-import { TreasuryService, fundTreasuryForDemo } from '@command-rail/solana';
-import { AuditEventType, ActorType } from '@command-rail/shared';
+import { CreateCompanySchema, CreateTreasurySchema } from '@aegis/shared';
+import { TreasuryService, fundTreasuryForDemo } from '@aegis/solana';
+import { AuditEventType, ActorType } from '@aegis/shared';
 import { createAuditLog } from '../services/audit.js';
 
 export async function companiesRoutes(app: FastifyInstance) {
@@ -149,7 +149,7 @@ export async function companiesRoutes(app: FastifyInstance) {
       // Safety guard: refuse to run against mainnet accidentally
       if (treasury.network !== 'devnet') return reply.badRequest('fund-demo only works on devnet');
 
-      // Call the devnet funding utility from @command-rail/solana
+      // Call the devnet funding utility from @aegis/solana
       // If DEVNET_DEMO_MINT_ADDRESS is set in env, reuses that mint.
       // Otherwise creates a fresh mint (and logs the address to add to .env).
       const fundArgs: Parameters<typeof fundTreasuryForDemo>[0] = {

@@ -6,7 +6,7 @@
  *  AUDIT LOG SERVICE — IMMUTABLE EVENT TRAIL
  * ═══════════════════════════════════════════════════════════════
  *
- * Every governance decision in CommandRail is recorded here.
+ * Every governance decision in Aegis Protocol is recorded here.
  * The audit log is the trust layer — it lets operators answer:
  *
  *   "Who approved this spend? When? What policy matched?"
@@ -42,7 +42,7 @@
  */
 
 import type { PrismaClient, Prisma } from '@prisma/client';
-import { AuditEventType, ActorType } from '@command-rail/shared';
+import { AuditEventType, ActorType } from '@aegis/shared';
 
 type CreateAuditLogParams = {
   prisma: PrismaClient;

@@ -20,7 +20,7 @@ import { Resend } from 'resend';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-const FROM = process.env.NOTIFICATION_FROM_EMAIL ?? 'CommandRail <noreply@commandrail.io>';
+const FROM = process.env.NOTIFICATION_FROM_EMAIL ?? 'Aegis Protocol <noreply@commandrail.io>';
 const DASHBOARD_URL = process.env.DASHBOARD_URL ?? 'http://localhost:3000';
 
 /**
@@ -54,7 +54,7 @@ export async function notifyApprovalNeeded({
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
           <div style="background: #7c3aed; color: white; padding: 16px 20px; border-radius: 8px 8px 0 0;">
-            <strong>⚡ CommandRail</strong> — Approval Required
+            <strong>⚡ Aegis Protocol</strong> — Approval Required
           </div>
           <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
             <p style="margin: 0 0 16px; color: #111827; font-size: 16px;">
@@ -127,7 +127,7 @@ export async function notifyApprovalDecision({
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
           <div style="background: ${color}; color: white; padding: 16px 20px; border-radius: 8px 8px 0 0;">
-            <strong>⚡ CommandRail</strong> — Spend Request ${label}
+            <strong>⚡ Aegis Protocol</strong> — Spend Request ${label}
           </div>
           <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
             <p style="margin: 0 0 16px; color: #111827; font-size: 16px;">

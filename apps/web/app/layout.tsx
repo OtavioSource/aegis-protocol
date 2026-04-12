@@ -5,7 +5,7 @@ import './globals.css';
 const geist = Geist({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'CommandRail — Agent Governance',
+  title: 'Aegis Protocol — Agent Governance',
   description: 'Economic governance control plane for AI agents on Solana',
 };
 

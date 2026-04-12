@@ -19,7 +19,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
             <Zap className="h-6 w-6 text-white" />
           </div>
           <div>
-            <p className="font-bold text-white text-xl tracking-tight">CommandRail</p>
+            <p className="font-bold text-white text-xl tracking-tight">Aegis Protocol</p>
             <p className="text-gray-500 text-xs">Agent Governance Platform</p>
           </div>
         </div>
@@ -92,7 +92,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
 
           <p className="text-xs text-gray-600 text-center mt-6">
             Demo: <span className="text-gray-400">admin@acme.com</span> /{' '}
-            <span className="text-gray-400">commandrail</span>
+            <span className="text-gray-400">aegis</span>
           </p>
         </div>
       </div>

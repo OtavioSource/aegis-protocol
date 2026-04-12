@@ -6,7 +6,7 @@
  *  AGENTS — REGISTRATION, MANAGEMENT, AND GOVERNANCE CONTROLS
  * ═══════════════════════════════════════════════════════════════
  *
- * An Agent in CommandRail represents a single AI agent instance that has
+ * An Agent in Aegis Protocol represents a single AI agent instance that has
  * been granted controlled economic autonomy. Every spend request is
  * attributed to exactly one agent.
  *
@@ -58,7 +58,7 @@ import {
   CreateBudgetSchema,
   AuditEventType,
   ActorType,
-} from '@command-rail/shared';
+} from '@aegis/shared';
 import { createAuditLog } from '../services/audit.js';
 
 /**

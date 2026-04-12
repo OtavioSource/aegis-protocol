@@ -1,4 +1,4 @@
-# CommandRail — Hackathon Submission Checklist
+# Aegis Protocol — Hackathon Submission Checklist
 
 ## Solana Frontier Hackathon (Colosseum) · Deadline: May 11, 2026
 
@@ -10,8 +10,8 @@
 - [ ] GitHub repo is public
 - [ ] README.md complete (architecture, setup, API docs)
 - [ ] `pnpm install && docker compose up -d && pnpm dev` works from scratch
-- [ ] All 17 policy engine tests pass (`pnpm --filter @command-rail/policy-engine test`)
-- [ ] Demo script runs cleanly (`pnpm --filter @command-rail/api demo`)
+- [ ] All 17 policy engine tests pass (`pnpm --filter @aegis-protocol/policy-engine test`)
+- [ ] Demo script runs cleanly (`pnpm --filter @aegis-protocol/api demo`)
 
 ### Solana Integration
 - [ ] Real SPL token transfers on devnet (not simulated)
@@ -30,7 +30,7 @@
 ### Videos
 - [ ] **Pitch video** (3 min): Problem → Solution → Market → Demo
   - Problem: AI agents need economic autonomy but no governance exists
-  - Solution: CommandRail = control plane for agent spending
+  - Solution: Aegis Protocol = control plane for agent spending
   - Demo: show the 4 scenarios in the dashboard
   - Market: every company deploying AI agents in 2026+
 - [ ] **Technical demo** (2-3 min): CLI demo + dashboard walkthrough
@@ -39,11 +39,11 @@
   - Click Solana Explorer link for a real transaction
 
 ### Submission Form
-- [ ] Project name: CommandRail
+- [ ] Project name: Aegis Protocol
 - [ ] Tagline: Economic governance layer for AI agents on Solana
 - [ ] Category: AI + Infrastructure
-- [ ] GitHub URL: https://github.com/command-rail/command-rail
-- [ ] Live demo URL: https://commandrail.vercel.app
+- [ ] GitHub URL: https://github.com/aegis-protocol/aegis-protocol
+- [ ] Live demo URL: https://aegis.vercel.app
 - [ ] Pitch video URL: (YouTube/Loom)
 - [ ] Tech demo URL: (YouTube/Loom)
 
@@ -62,7 +62,7 @@ Vision: "Stripe for AI agent payments"
 1. Tweet thread on Day 1 with demo GIF
 2. Post in r/AI_Agents, LangChain Discord, CrewAI Discord
 3. Contact 5 AI agent builders for early access
-4. Landing page at commandrail.io with email capture
+4. Landing page at aegis.io with email capture
 5. 30s kill switch clip on Twitter/X (visually dramatic)
 ```
 
@@ -86,8 +86,8 @@ Vision: "Stripe for AI agent payments"
 ### Database (Neon)
 1. Create project at neon.tech
 2. Copy connection string to `DATABASE_URL`
-3. Run: `pnpm --filter @command-rail/api db:migrate`
-4. Run: `pnpm --filter @command-rail/api db:seed`
+3. Run: `pnpm --filter @aegis-protocol/api db:migrate`
+4. Run: `pnpm --filter @aegis-protocol/api db:seed`
 
 ---
 
@@ -99,7 +99,7 @@ docker compose up -d
 pnpm dev
 
 # Terminal 2 — Run the demo (record this)
-pnpm --filter @command-rail/api demo
+pnpm --filter @aegis-protocol/api demo
 
 # Browser — Show dashboard (record this)
 open http://localhost:3000/dashboard
