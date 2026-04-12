@@ -165,11 +165,15 @@ export async function companiesRoutes(app: FastifyInstance) {
       }
       const result = await fundTreasuryForDemo(fundArgs);
 
-      // Hint to operators: if no persistent mint was configured, they should
-      // save this new mint address to avoid creating a new mint every time.
+      // Hint to operators: save the new mint address and delegate to .env for persistence.
       if (!process.env['DEVNET_DEMO_MINT_ADDRESS'] && result.mintAddress) {
-        console.log(`ℹ️  New demo mint created: ${result.mintAddress}`);
-        console.log(`   Add DEVNET_DEMO_MINT_ADDRESS=${result.mintAddress} to .env`);
+        console.log(`ℹ️  New Token-2022 demo mint created: ${result.mintAddress}`);
+        console.log(`   Add to apps/api/.env:`);
+        console.log(`   DEVNET_DEMO_MINT_ADDRESS=${result.mintAddress}`);
+        if (!process.env['AEGIS_DELEGATE_SECRET']) {
+          console.log(`   ⚠️  AEGIS_DELEGATE_SECRET not set — kill switch will be DB-only.`);
+          console.log(`      Generate a delegate keypair and set AEGIS_DELEGATE_SECRET in .env.`);
+        }
       }
 
       await createAuditLog({
@@ -191,6 +195,7 @@ export async function companiesRoutes(app: FastifyInstance) {
         treasuryId,
         walletAddress: treasury.walletAddress,
         mintAddress: result.mintAddress,
+        permanentDelegateAddress: result.permanentDelegateAddress,
         amount,
         solSignature: result.solSignature,
         mintSignature: result.mintSignature,

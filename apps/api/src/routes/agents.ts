@@ -59,6 +59,7 @@ import {
   AuditEventType,
   ActorType,
 } from '@aegis/shared';
+import { TreasuryService } from '@aegis/solana';
 import { createAuditLog } from '../services/audit.js';
 
 /**
@@ -239,6 +240,36 @@ export async function agentsRoutes(app: FastifyInstance) {
         data: { killSwitchActive: activate },
       });
 
+      // When activating: freeze the treasury both in DB and on-chain via Permanent Delegate.
+      // The on-chain freeze sweeps all tokens to a quarantine wallet using the
+      // Token-2022 Permanent Delegate authority, making the freeze cryptographically
+      // enforced — not just a DB flag.
+      let onChainFreezeSignature: string | null = null;
+      if (activate && agent.treasuryId) {
+        try {
+          const treasury = await app.prisma.treasury.findUnique({
+            where: { id: agent.treasuryId },
+          });
+          if (treasury && treasury.status !== 'FROZEN') {
+            // Freeze in DB first (synchronous, always succeeds)
+            await app.prisma.treasury.update({
+              where: { id: agent.treasuryId },
+              data: { status: 'FROZEN' },
+            });
+            // Execute on-chain sweep via Permanent Delegate (async, may fail gracefully)
+            const treasuryService = new TreasuryService(
+              treasury.network as 'devnet' | 'mainnet-beta',
+            );
+            await treasuryService.freezeTreasury(treasury.walletAddress);
+            onChainFreezeSignature = 'executed'; // freezeTreasury logs the actual tx
+          }
+        } catch (err) {
+          // On-chain freeze failure does NOT roll back the kill switch.
+          // DB-level enforcement (killSwitchActive + treasury.status = FROZEN) is primary.
+          app.log.error({ err, agentId }, '[kill-switch] On-chain freeze failed');
+        }
+      }
+
       // Always audit kill switch changes — both activation and deactivation
       await createAuditLog({
         prisma: app.prisma,
@@ -249,7 +280,12 @@ export async function agentsRoutes(app: FastifyInstance) {
           : AuditEventType.KILL_SWITCH_DEACTIVATED,
         actorType: ActorType.ADMIN,
         actorId: 'admin',
-        payload: { reason: reason ?? null, previousState: agent.killSwitchActive },
+        payload: {
+          reason: reason ?? null,
+          previousState: agent.killSwitchActive,
+          treasuryFrozen: activate && !!agent.treasuryId,
+          onChainFreezeExecuted: onChainFreezeSignature !== null,
+        },
       });
 
       const { apiKeyHash: _, ...safeAgent } = updated;
