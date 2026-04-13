@@ -316,6 +316,65 @@ export type PolicyEvaluationInput = {
   };
 };
 
+// ─── Settlement Adapter ───────────────────────────────────────────────────────
+//
+// Chain-agnostic interface for treasury operations. All concrete settlement
+// implementations (Solana, Stellar, etc.) must satisfy this contract.
+//
+// This interface makes the API layer chain-agnostic:
+//   - Select adapter by treasury.network at runtime
+//   - Swap Solana for Stellar without changing governance logic
+//   - Mock the adapter in unit tests without a real Solana connection
+//
+// Current implementations:
+//   - TreasuryService (@aegis/solana) — Token-2022 + Permanent Delegate
+//
+// Planned implementations:
+//   - StellarTreasuryService (@aegis/stellar) — path payments + Horizon API
+
+export type AdapterWalletInfo = {
+  /** Public key / address — safe to expose in API responses */
+  publicKey: string;
+  /** Base64-encoded secret key — server-side only, never exposed */
+  encryptedSecret: string;
+};
+
+export type AdapterTransferResult = {
+  /** On-chain transaction signature / hash */
+  signature: string;
+  /** Direct explorer link for the transaction */
+  explorerUrl: string;
+};
+
+export type AdapterTransferParams = {
+  /** Source wallet: base64-encoded secret key */
+  fromEncryptedSecret: string;
+  /** Destination wallet: public key / address (base58 for Solana) */
+  toPublicKey: string;
+  /** Human-readable amount (e.g. 25.00 for 25 USDC) */
+  amount: number;
+  /** Asset identifier (e.g. 'USDC', 'EURC') */
+  asset: string;
+};
+
+/**
+ * SettlementAdapter — the single interface all chain integrations must implement.
+ *
+ * The API instantiates the right adapter based on treasury.network:
+ *   'devnet' | 'mainnet-beta'  → TreasuryService (@aegis/solana)
+ *   'stellar-testnet' | 'stellar-mainnet' → StellarTreasuryService (@aegis/stellar)
+ */
+export interface SettlementAdapter {
+  /** Generate a new wallet keypair for a treasury */
+  createWallet(): AdapterWalletInfo;
+  /** Execute a token transfer from one wallet to another */
+  transfer(params: AdapterTransferParams): Promise<AdapterTransferResult>;
+  /** Freeze a wallet — revoke spend capability (on-chain or DB-level) */
+  freeze(walletAddress: string): Promise<void>;
+  /** Get current token balance in human-readable units */
+  getBalance(walletAddress: string): Promise<number>;
+}
+
 /**
  * PolicyEvaluationResult — the decision returned by the policy engine.
  *

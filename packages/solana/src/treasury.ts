@@ -72,6 +72,11 @@ import {
   transferChecked,
 } from '@solana/spl-token';
 import { DevnetUsdcMint, DEVNET_RPC_URL, explorerTxUrl } from './constants.js';
+import type {
+  SettlementAdapter,
+  AdapterTransferParams,
+  AdapterTransferResult,
+} from '@aegis/shared';
 
 /**
  * WalletInfo — returned by createWallet().
@@ -100,7 +105,7 @@ export type TransferResult = {
  * The network parameter selects devnet vs mainnet-beta; the RPC URL
  * comes from the SOLANA_RPC_URL environment variable.
  */
-export class TreasuryService {
+export class TreasuryService implements SettlementAdapter {
   private connection: Connection;
   private network: 'devnet' | 'mainnet-beta';
 
@@ -470,6 +475,33 @@ export class TreasuryService {
       `  To:    ${quarantineAddress.toBase58()} (quarantine)\n` +
       `  Tx:    ${explorerLink}`,
     );
+  }
+
+  // ─── SettlementAdapter interface methods ──────────────────────────────────
+  // These are the chain-agnostic adapter methods used when the API layer
+  // treats TreasuryService as a SettlementAdapter (e.g., to support
+  // adapter selection based on treasury.network for future Stellar support).
+
+  /**
+   * transfer() — SettlementAdapter wrapper around transferUsdc().
+   * Maps AdapterTransferParams to the existing transferUsdc() signature.
+   */
+  async transfer(params: AdapterTransferParams): Promise<AdapterTransferResult> {
+    return this.transferUsdc(params.fromEncryptedSecret, params.toPublicKey, params.amount);
+  }
+
+  /**
+   * freeze() — SettlementAdapter wrapper around freezeTreasury().
+   */
+  async freeze(walletAddress: string): Promise<void> {
+    return this.freezeTreasury(walletAddress);
+  }
+
+  /**
+   * getBalance() — SettlementAdapter wrapper around getUsdcBalance().
+   */
+  async getBalance(walletAddress: string): Promise<number> {
+    return this.getUsdcBalance(walletAddress);
   }
 
   /**
