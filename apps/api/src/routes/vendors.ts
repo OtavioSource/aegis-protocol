@@ -23,6 +23,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { CreateVendorSchema, UpdateVendorSchema } from '@aegis/shared';
+import { generateSolanaPayUri } from '@aegis/solana';
 
 export async function vendorsRoutes(app: FastifyInstance) {
   // ─── POST /companies/:companyId/vendors ───────────────────────────────────
@@ -97,6 +98,63 @@ export async function vendorsRoutes(app: FastifyInstance) {
         },
       });
       return updated;
+    },
+  );
+
+  // ─── GET /vendors/:vendorId/solana-pay-uri ────────────────────────────────
+  // Generate a Solana Pay URI for a vendor invoice.
+  //
+  // The vendor's wallet address is used as the payment recipient.
+  // A fresh reference keypair is generated per request for on-chain tracking.
+  // The returned URI can be rendered as a QR code for agents to scan, or
+  // passed directly to aegis.pay(uri) in the Aegis SDK.
+  //
+  // Query params:
+  //   amount  — required, token amount (e.g. 25.00 for 25 USDC)
+  //   message — optional, invoice description
+  //
+  // The SPL token mint is read from DEVNET_DEMO_MINT_ADDRESS env (demo mint)
+  // or falls back to the Circle devnet USDC mint.
+  app.get<{ Params: { vendorId: string }; Querystring: { amount?: string; message?: string } }>(
+    '/vendors/:vendorId/solana-pay-uri',
+    async (request, reply) => {
+      const { vendorId } = request.params;
+      const { amount: amountStr, message } = request.query;
+
+      const vendor = await app.prisma.vendor.findUnique({ where: { id: vendorId } });
+      if (!vendor) return reply.notFound('Vendor not found');
+      if (vendor.status === 'BLOCKED') return reply.forbidden('Vendor is blocked');
+
+      const amount = amountStr ? parseFloat(amountStr) : undefined;
+      if (!amount || isNaN(amount) || amount <= 0) {
+        return reply.badRequest('Query param `amount` is required and must be a positive number');
+      }
+
+      // Use demo mint if configured, otherwise fall back to Circle devnet USDC
+      const splTokenMint =
+        process.env['DEVNET_DEMO_MINT_ADDRESS'] ?? '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+
+      const result = generateSolanaPayUri({
+        recipient: vendor.walletAddress,
+        amount,
+        splTokenMint,
+        label: vendor.name,
+        ...(message ? { message } : {}),
+      });
+
+      return {
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+        walletAddress: vendor.walletAddress,
+        amount,
+        currency: 'USDC',
+        splTokenMint,
+        uri: result.uri,
+        reference: result.reference,
+        explorerUrl: result.explorerUrl,
+        // Hint: render result.uri as a QR code in the dashboard
+        // or pass to aegis.pay(result.uri) in the Aegis SDK
+      };
     },
   );
 

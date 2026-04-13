@@ -186,4 +186,100 @@ export class Aegis {
 
     throw new Error(`waitForApproval timed out after ${timeoutMs}ms for request ${requestId}`);
   }
+
+  /**
+   * Pay a vendor via a Solana Pay URI.
+   *
+   * Parses the URI, extracts the vendor, amount, and reference, then submits
+   * a governed SpendRequest through the Aegis policy engine. If auto-approved,
+   * the SPL token transfer is executed immediately.
+   *
+   * This is the agent-side API for Solana Pay vendor invoices:
+   *   vendor generates QR → agent calls aegis.pay(uri) → policy evaluates →
+   *   transfer executes on-chain (with cNFT audit receipt)
+   *
+   * @param uri - Solana Pay URI (solana:<recipient>?amount=...&spl-token=...&label=...&message=...)
+   * @param options.actionType - override action type (default: 'vendor_invoice')
+   * @param options.reason - override spend reason (default: parsed from URI message/label)
+   *
+   * @example
+   * const result = await aegis.pay('solana:So11...?amount=25&label=OpenAI&message=GPT-4+credits');
+   * if (result.status === 'EXECUTED') {
+   *   console.log('Paid! TX:', result.txSignature);
+   * }
+   */
+  async pay(
+    uri: string,
+    options: { actionType?: string; reason?: string } = {},
+  ): Promise<SpendRequestResponse> {
+    const parsed = parseSolanaPayUri(uri);
+
+    const vendor = parsed.label ?? parsed.recipient;
+    const reason =
+      options.reason ??
+      parsed.message ??
+      `Solana Pay invoice from ${vendor} for ${parsed.amount} USDC`;
+
+    const result = await this.requestSpend({
+      actionType: options.actionType ?? 'vendor_invoice',
+      vendor,
+      amount: parsed.amount,
+      reason,
+      ...(parsed.reference ? { reference: parsed.reference } : {}),
+      metadata: {
+        solanaPay: true,
+        recipient: parsed.recipient,
+        splTokenMint: parsed.splTokenMint,
+        reference: parsed.reference,
+        uri,
+      },
+    });
+
+    if (result.status === 'APPROVED') {
+      return this.execute(result.id);
+    }
+
+    return result;
+  }
+}
+
+/**
+ * parseSolanaPayUri() — parse a Solana Pay URI without heavy dependencies.
+ *
+ * Implements the Solana Pay URI spec (SIMD-0057):
+ *   solana:<recipient>?amount=<amount>&spl-token=<mint>&reference=<ref>&label=<label>&message=<msg>
+ *
+ * Kept internal to the SDK to avoid importing @aegis/solana (heavy Node.js deps).
+ */
+function parseSolanaPayUri(uri: string): {
+  recipient: string;
+  amount: number;
+  splTokenMint: string | null;
+  reference: string | null;
+  label: string | null;
+  message: string | null;
+} {
+  if (!uri.startsWith('solana:')) {
+    throw new Error(`Invalid Solana Pay URI: must start with 'solana:'`);
+  }
+
+  const withoutScheme = uri.slice('solana:'.length);
+  const questionMark = withoutScheme.indexOf('?');
+  const recipient = questionMark === -1 ? withoutScheme : withoutScheme.slice(0, questionMark);
+  const queryString = questionMark === -1 ? '' : withoutScheme.slice(questionMark);
+  const params = new URLSearchParams(queryString);
+
+  const amountStr = params.get('amount');
+  if (!amountStr) throw new Error('Solana Pay URI missing required amount parameter');
+  const amount = parseFloat(amountStr);
+  if (isNaN(amount) || amount <= 0) throw new Error(`Invalid amount in Solana Pay URI: ${amountStr}`);
+
+  return {
+    recipient,
+    amount,
+    splTokenMint: params.get('spl-token'),
+    reference: params.get('reference'),
+    label: params.get('label'),
+    message: params.get('message'),
+  };
 }
