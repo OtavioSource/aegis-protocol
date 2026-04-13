@@ -52,11 +52,12 @@ datasource db {
 // The slug is a human-readable identifier (e.g., "acme-corp") for URLs and logs.
 
 model Company {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique // Human-readable ID, globally unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique // Human-readable ID, globally unique
+  merkleTreeAddress String?           // Bubblegum cNFT tree for audit receipts (created lazily)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   treasuries    Treasury[]
   agents        Agent[]

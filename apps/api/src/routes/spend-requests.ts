@@ -52,7 +52,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { CreateSpendRequestSchema, AuditEventType, ActorType, AgentStatus, Currency, PolicyDecision } from '@aegis/shared';
 import { evaluate } from '@aegis/policy-engine';
-import { TreasuryService } from '@aegis/solana';
+import { TreasuryService, createCompanyMerkleTree, mintDecisionReceipt } from '@aegis/solana';
 import { hashApiKey } from '../middleware/auth.js';
 import { createAuditLog } from '../services/audit.js';
 import { notifyApprovalNeeded } from '../services/notify.js';
@@ -229,6 +229,71 @@ export async function spendRequestsRoutes(app: FastifyInstance) {
       actorId: agent.id,
       payload: { amount: body.amount, vendor: body.vendor, actionType: body.actionType },
     });
+
+    // ── cNFT Audit Receipt (fire-and-forget) ────────────────────────────────
+    // Mint a compressed NFT on-chain for every policy decision — making the
+    // audit trail verifiable on Solana, not just in our DB.
+    // Non-blocking: runs after the response is sent so it doesn't slow the agent.
+    // Failure is logged but never surfaces to the caller.
+    void (async () => {
+      const delegateSecret = process.env['AEGIS_DELEGATE_SECRET'];
+      if (!delegateSecret) return; // Skip if Permanent Delegate not configured
+
+      try {
+        // Lazy Merkle tree creation: if this company doesn't have a tree yet,
+        // create one (costs ~0.1 SOL, paid by AEGIS_DELEGATE_SECRET keypair).
+        let treeAddress = agent.company.merkleTreeAddress;
+        if (!treeAddress) {
+          const tree = await createCompanyMerkleTree(delegateSecret);
+          treeAddress = tree.treeAddress;
+          await app.prisma.company.update({
+            where: { id: agent.companyId },
+            data: { merkleTreeAddress: treeAddress },
+          });
+          app.log.info({ treeAddress, companyId: agent.companyId }, '[receipt] Merkle tree created');
+        }
+
+        const receipt = await mintDecisionReceipt({
+          treeAddress,
+          payerSecretBase64: delegateSecret,
+          spendRequestId: spendRequest.id,
+          decision: evaluationResult.decision,
+          agentId: agent.id,
+          vendor: body.vendor,
+          amount: body.amount,
+          // exactOptionalPropertyTypes: omit optional fields instead of passing undefined
+          ...(agent.treasury?.walletAddress ? { ownerAddress: agent.treasury.walletAddress } : {}),
+          ...(evaluationResult.matchedRule ? { matchedRule: evaluationResult.matchedRule } : {}),
+        });
+
+        if (receipt) {
+          app.log.info(
+            { spendRequestId: spendRequest.id, assetId: receipt.assetId, leafIndex: receipt.leafIndex },
+            '[receipt] cNFT minted',
+          );
+          // Append receipt info to the existing submission audit log payload
+          // by creating a dedicated receipt audit log entry.
+          await createAuditLog({
+            prisma: app.prisma,
+            companyId: agent.companyId,
+            agentId: agent.id,
+            spendRequestId: spendRequest.id,
+            eventType: AuditEventType.SPEND_REQUEST_SUBMITTED, // reuse event type for receipt
+            actorType: ActorType.SYSTEM,
+            actorId: 'receipt-minter',
+            payload: {
+              receiptAssetId: receipt.assetId,
+              receiptLeafIndex: receipt.leafIndex,
+              receiptTxSignature: receipt.txSignature,
+              receiptExplorerUrl: receipt.explorerUrl,
+              merkleTreeAddress: receipt.treeAddress,
+            },
+          });
+        }
+      } catch (err) {
+        app.log.error({ err, spendRequestId: spendRequest.id }, '[receipt] cNFT mint failed');
+      }
+    })();
 
     return reply.status(201).send(spendRequest);
   });
