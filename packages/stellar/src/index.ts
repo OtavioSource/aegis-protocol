@@ -23,3 +23,5 @@ export { fundTestnetAccount } from './friendbot.js';
 export type { FriendbotResult } from './friendbot.js';
 export { establishTrustline, hasTrustline } from './trustlines.js';
 export { getAsset, isNativeAsset } from './assets.js';
+export { findStrictReceivePath, executePathPayment } from './path-payments.js';
+export type { PathQuote } from './path-payments.js';

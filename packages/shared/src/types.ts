@@ -344,6 +344,37 @@ export type AdapterTransferResult = {
   signature: string;
   /** Direct explorer link for the transaction */
   explorerUrl: string;
+  /**
+   * Path payment metadata — populated only when the transfer was a
+   * cross-currency swap (Stellar pathPaymentStrictReceive).
+   * Null/undefined for plain same-asset transfers.
+   */
+  pathPayment?: {
+    /** Asset codes used as intermediate hops by the DEX (e.g. ['XLM']) */
+    path: string[];
+    /** Amount actually paid by the sender (may differ from amount due to slippage) */
+    sourceAmount: number;
+    /** Effective conversion rate: sourceAmount / amount */
+    conversionRate: number;
+  };
+};
+
+/**
+ * AdapterPathQuote — quote for a cross-currency atomic swap.
+ *
+ * Only meaningful for chains that support native path payments (Stellar).
+ * Returned by getPathQuote() which is an optional adapter capability.
+ */
+export type AdapterPathQuote = {
+  sourceAsset: string;
+  receiveAsset: string;
+  receiveAmount: number;
+  sourceMax: number;
+  effectiveRate: number;
+  /** Asset codes used as intermediate hops by the DEX */
+  path: string[];
+  /** ISO timestamp after which the quote may no longer be valid */
+  validUntil: string;
 };
 
 export type AdapterTransferParams = {
@@ -351,10 +382,23 @@ export type AdapterTransferParams = {
   fromEncryptedSecret: string;
   /** Destination wallet: public key / address (base58 for Solana) */
   toPublicKey: string;
-  /** Human-readable amount (e.g. 25.00 for 25 USDC) */
+  /** Human-readable amount the recipient receives (e.g. 25.00 for 25 EURC) */
   amount: number;
-  /** Asset identifier (e.g. 'USDC', 'EURC') */
+  /** Asset code the source sends from treasury (e.g. 'USDC') */
   asset: string;
+  /**
+   * Optional asset code the recipient receives. When provided and different
+   * from `asset`, the chain implementation should perform a cross-currency
+   * atomic swap (Stellar path payment) — the recipient receives `amount`
+   * of `receiveAsset`, the sender pays up to a slippage-bounded amount of `asset`.
+   *
+   * - Stellar: routes to pathPaymentStrictReceive on the on-ledger DEX.
+   * - Solana: should throw (no native cross-currency path payment without
+   *   external aggregator like Jupiter).
+   *
+   * If undefined or equal to `asset`, behaves as same-asset transfer.
+   */
+  receiveAsset?: string;
 };
 
 /**
@@ -373,6 +417,17 @@ export interface SettlementAdapter {
   freeze(walletAddress: string): Promise<void>;
   /** Get current token balance in human-readable units */
   getBalance(walletAddress: string): Promise<number>;
+  /**
+   * Optional: quote a cross-currency path payment before execution.
+   * Only implemented by chains with native cross-currency support (Stellar).
+   * Solana implementations omit this method.
+   */
+  getPathQuote?(params: {
+    sourceAsset: string;
+    receiveAsset: string;
+    receiveAmount: number;
+    fromAccount: string;
+  }): Promise<AdapterPathQuote | null>;
 }
 
 /**

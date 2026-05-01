@@ -53,6 +53,7 @@ import { approvalsRoutes } from './routes/approvals.js';
 import { auditRoutes } from './routes/audit.js';
 import { vendorsRoutes } from './routes/vendors.js';
 import { usersRoutes } from './routes/users.js';
+import { stellarRoutes } from './routes/stellar.js';
 import { prismaPlugin } from './plugins/prisma.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -109,6 +110,9 @@ export async function buildServer() {
 
   // Admin user management + login endpoint for NextAuth
   await app.register(usersRoutes, { prefix: '' });
+
+  // Stellar-specific utilities (path payment quotes)
+  await app.register(stellarRoutes, { prefix: '' });
 
   // Health check endpoint — polled by Railway to determine deploy success
   app.get('/health', async () => ({ status: 'ok', ts: new Date().toISOString() }));

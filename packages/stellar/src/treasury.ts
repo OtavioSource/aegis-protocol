@@ -51,6 +51,7 @@ import type {
   AdapterTransferParams,
   AdapterTransferResult,
   AdapterWalletInfo,
+  AdapterPathQuote,
 } from '@aegis/shared';
 import {
   horizonUrl,
@@ -60,6 +61,7 @@ import {
 } from './constants.js';
 import { getAsset } from './assets.js';
 import { hasTrustline } from './trustlines.js';
+import { findStrictReceivePath, executePathPayment } from './path-payments.js';
 
 export class StellarTreasuryService implements SettlementAdapter {
   private server: Horizon.Server;
@@ -143,38 +145,57 @@ export class StellarTreasuryService implements SettlementAdapter {
   /**
    * transfer() — SettlementAdapter contract method.
    *
-   * Phase 3 (current): same-asset transfers via Operation.payment.
-   *   - XLM → XLM: native transfer
-   *   - USDC → USDC: trustline-based transfer (recipient must have trustline)
+   * Routes to one of two flows based on whether source and destination
+   * assets match:
    *
-   * Phase 4 (future): when receiveAsset is provided and differs from asset,
-   * route to path-payments.ts for cross-currency atomic swap via Stellar DEX.
+   *   Same-asset (USDC→USDC, XLM→XLM, EURC→EURC):
+   *     Operation.payment — direct transfer, no DEX involved.
    *
-   * Pre-checks the recipient has a trustline for non-XLM assets — fails fast
-   * with a clear error instead of submitting a doomed transaction.
+   *   Cross-currency (USDC→EURC, etc):
+   *     pathPaymentStrictReceive — atomic swap via on-ledger DEX.
+   *     Recipient receives exact amount of receiveAsset; sender pays up
+   *     to slippage-bounded amount of source asset.
+   *
+   * Pre-checks the recipient has a trustline for the receive asset.
    */
   async transfer(params: AdapterTransferParams): Promise<AdapterTransferResult> {
     const sourceKp = this.restoreKeypair(params.fromEncryptedSecret);
-    const asset = getAsset(params.asset, this.network);
+    const sourceAsset = getAsset(params.asset, this.network);
+    const destAsset = params.receiveAsset
+      ? getAsset(params.receiveAsset, this.network)
+      : sourceAsset;
 
-    // Pre-check: recipient must have a trustline for non-native assets.
-    // Submitting without trustline would fail with op_no_trust on-chain — we
-    // catch it here for a clearer error message and to save the gas.
-    if (!asset.isNative()) {
+    const isPathPayment = !sourceAsset.equals(destAsset);
+
+    // Pre-check: recipient must have a trustline for the receive asset
+    // (non-native). Submitting without trustline fails with op_no_trust;
+    // we catch it here for a clearer error and to save gas.
+    if (!destAsset.isNative()) {
       const trusted = await hasTrustline({
         server: this.server,
         accountAddress: params.toPublicKey,
-        asset,
+        asset: destAsset,
       });
       if (!trusted) {
         throw new Error(
-          `Recipient ${params.toPublicKey} has no trustline for ${asset.code} ` +
-            `(issuer ${asset.issuer}). The vendor must establish a trustline ` +
+          `Recipient ${params.toPublicKey} has no trustline for ${destAsset.code} ` +
+            `(issuer ${destAsset.issuer}). The vendor must establish a trustline ` +
             `before receiving this asset.`,
         );
       }
     }
 
+    if (isPathPayment) {
+      return this.executePathPaymentTransfer({
+        sourceKp,
+        sourceAsset,
+        destAsset,
+        destAddress: params.toPublicKey,
+        destAmount: params.amount,
+      });
+    }
+
+    // Same-asset payment — simpler path
     const sourceAccount = await this.server.loadAccount(sourceKp.publicKey());
 
     const builder = new TransactionBuilder(sourceAccount, {
@@ -185,9 +206,8 @@ export class StellarTreasuryService implements SettlementAdapter {
     builder.addOperation(
       Operation.payment({
         destination: params.toPublicKey,
-        asset,
+        asset: sourceAsset,
         // Stellar represents amounts as decimal strings with up to 7 places.
-        // Number → string conversion truncates safely for typical USDC values.
         amount: params.amount.toFixed(7),
       }),
     );
@@ -200,6 +220,90 @@ export class StellarTreasuryService implements SettlementAdapter {
     return {
       signature: result.hash,
       explorerUrl: stellarExpertTxUrl(result.hash, this.network),
+    };
+  }
+
+  /**
+   * executePathPaymentTransfer() — internal: cross-currency atomic swap.
+   *
+   * Quotes the path via Horizon, then submits a pathPaymentStrictReceive
+   * transaction. Throws if no liquidity path exists.
+   */
+  private async executePathPaymentTransfer(args: {
+    sourceKp: Keypair;
+    sourceAsset: Asset;
+    destAsset: Asset;
+    destAddress: string;
+    destAmount: number;
+  }): Promise<AdapterTransferResult> {
+    const quote = await findStrictReceivePath({
+      server: this.server,
+      sourceAsset: args.sourceAsset,
+      destAsset: args.destAsset,
+      destAmount: args.destAmount.toFixed(7),
+    });
+
+    if (!quote) {
+      throw new Error(
+        `No path found from ${args.sourceAsset.code} to ${args.destAsset.code} ` +
+          `for ${args.destAmount}. Insufficient DEX liquidity.`,
+      );
+    }
+
+    const result = await executePathPayment({
+      server: this.server,
+      network: this.network,
+      sourceKeypair: args.sourceKp,
+      destAddress: args.destAddress,
+      quote,
+    });
+
+    return {
+      signature: result.hash,
+      explorerUrl: stellarExpertTxUrl(result.hash, this.network),
+      pathPayment: {
+        path: quote.path.map((a) => (a.isNative() ? 'XLM' : a.code)),
+        sourceAmount: parseFloat(result.sourceAmount),
+        conversionRate: quote.effectiveRate,
+      },
+    };
+  }
+
+  /**
+   * getPathQuote() — quote a cross-currency swap before execution.
+   *
+   * Useful for UIs that want to show "you'll pay ~X to send Y" before
+   * the user confirms. Returns null if no path exists.
+   */
+  async getPathQuote(params: {
+    sourceAsset: string;
+    receiveAsset: string;
+    receiveAmount: number;
+    fromAccount: string;
+  }): Promise<AdapterPathQuote | null> {
+    const sourceAsset = getAsset(params.sourceAsset, this.network);
+    const destAsset = getAsset(params.receiveAsset, this.network);
+
+    const quote = await findStrictReceivePath({
+      server: this.server,
+      sourceAsset,
+      destAsset,
+      destAmount: params.receiveAmount.toFixed(7),
+    });
+
+    if (!quote) return null;
+
+    // Path quotes are loosely valid for ~30s before liquidity may shift.
+    const validUntil = new Date(Date.now() + 30_000).toISOString();
+
+    return {
+      sourceAsset: params.sourceAsset,
+      receiveAsset: params.receiveAsset,
+      receiveAmount: params.receiveAmount,
+      sourceMax: parseFloat(quote.sendMax),
+      effectiveRate: quote.effectiveRate,
+      path: quote.path.map((a) => (a.isNative() ? 'XLM' : a.code)),
+      validUntil,
     };
   }
 
