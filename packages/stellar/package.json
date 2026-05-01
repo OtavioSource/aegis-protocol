@@ -14,13 +14,15 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "setup-demo": "tsx src/scripts/setup-demo.ts"
   },
   "dependencies": {
     "@aegis/shared": "workspace:*",
     "@stellar/stellar-sdk": "^13.0.0"
   },
   "devDependencies": {
+    "tsx": "^4.19.3",
     "typescript": "^5.7.3"
   }
 }
