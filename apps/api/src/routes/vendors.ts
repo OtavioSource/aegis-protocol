@@ -22,7 +22,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { CreateVendorSchema, UpdateVendorSchema } from '@aegis/shared';
+import { CreateVendorSchema, UpdateVendorSchema, AddVendorWalletSchema } from '@aegis/shared';
 import { generateSolanaPayUri } from '@aegis/solana';
 
 export async function vendorsRoutes(app: FastifyInstance) {
@@ -56,20 +56,112 @@ export async function vendorsRoutes(app: FastifyInstance) {
         );
       }
 
-      const vendor = await app.prisma.vendor.create({
-        data: {
-          companyId,
-          name: body.name,
-          walletAddress,                                   // Vendor.walletAddress kept for back-compat
-          description: body.description ?? null,
-          status: 'ACTIVE',
-          // VendorWallet record creation lives in Phase 5 (proper CRUD).
-          // For now Vendor.walletAddress is the source of truth for both
-          // Solana and Stellar flows.
-        },
+      // Determine the chain network for the initial wallet.
+      // initialWallet wins if provided (multi-chain explicit); otherwise default
+      // to 'devnet' for back-compat (legacy callers that only knew Solana).
+      const initialNetwork = body.initialWallet?.network ?? 'devnet';
+
+      // Create vendor + initial VendorWallet in a single transaction so a
+      // partial failure leaves no orphan records.
+      const vendor = await app.prisma.$transaction(async (tx) => {
+        const created = await tx.vendor.create({
+          data: {
+            companyId,
+            name: body.name,
+            walletAddress, // Kept for back-compat — populated even when initialWallet is provided
+            description: body.description ?? null,
+            status: 'ACTIVE',
+          },
+        });
+
+        await tx.vendorWallet.create({
+          data: {
+            vendorId: created.id,
+            network: initialNetwork,
+            walletAddress,
+            trustedAssets: (body.initialWallet?.trustedAssets ?? []) as object,
+          },
+        });
+
+        return created;
       });
 
       return reply.status(201).send(vendor);
+    },
+  );
+
+  // ─── GET /vendors/:vendorId/wallets ───────────────────────────────────────
+  // List all wallets registered for a vendor (one per chain).
+  app.get<{ Params: { vendorId: string } }>(
+    '/vendors/:vendorId/wallets',
+    async (request, reply) => {
+      const { vendorId } = request.params;
+
+      const vendor = await app.prisma.vendor.findUnique({ where: { id: vendorId } });
+      if (!vendor) return reply.notFound('Vendor not found');
+
+      const wallets = await app.prisma.vendorWallet.findMany({
+        where: { vendorId },
+        orderBy: { network: 'asc' },
+      });
+      return wallets;
+    },
+  );
+
+  // ─── POST /vendors/:vendorId/wallets ──────────────────────────────────────
+  // Add a new wallet to an existing vendor (e.g. registering a Stellar wallet
+  // for a vendor who already has a Solana wallet).
+  //
+  // Returns 409 if the vendor already has a wallet on the given network —
+  // the @@unique([vendorId, network]) constraint enforces one wallet per chain.
+  app.post<{ Params: { vendorId: string } }>(
+    '/vendors/:vendorId/wallets',
+    async (request, reply) => {
+      const { vendorId } = request.params;
+      const body = AddVendorWalletSchema.parse(request.body);
+
+      const vendor = await app.prisma.vendor.findUnique({ where: { id: vendorId } });
+      if (!vendor) return reply.notFound('Vendor not found');
+
+      const existing = await app.prisma.vendorWallet.findUnique({
+        where: { vendorId_network: { vendorId, network: body.network } },
+      });
+      if (existing) {
+        return reply.conflict(
+          `Vendor already has a wallet on '${body.network}'. ` +
+            `Use PATCH on the wallet (not yet implemented) or delete it first.`,
+        );
+      }
+
+      const wallet = await app.prisma.vendorWallet.create({
+        data: {
+          vendorId,
+          network: body.network,
+          walletAddress: body.walletAddress,
+          trustedAssets: (body.trustedAssets ?? []) as object,
+        },
+      });
+
+      return reply.status(201).send(wallet);
+    },
+  );
+
+  // ─── DELETE /vendors/:vendorId/wallets/:walletId ──────────────────────────
+  // Remove a specific wallet from a vendor. The vendor record itself is preserved.
+  app.delete<{ Params: { vendorId: string; walletId: string } }>(
+    '/vendors/:vendorId/wallets/:walletId',
+    async (request, reply) => {
+      const { vendorId, walletId } = request.params;
+
+      const wallet = await app.prisma.vendorWallet.findUnique({
+        where: { id: walletId },
+      });
+      if (!wallet || wallet.vendorId !== vendorId) {
+        return reply.notFound('Wallet not found for this vendor');
+      }
+
+      await app.prisma.vendorWallet.delete({ where: { id: walletId } });
+      return reply.status(204).send();
     },
   );
 

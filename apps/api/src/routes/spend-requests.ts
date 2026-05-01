@@ -145,7 +145,9 @@ export async function spendRequestsRoutes(app: FastifyInstance) {
           ? 'REQUIRES_APPROVAL'
           : 'REJECTED';
 
-    // Step 7: Persist the spend request with its initial status and decision metadata
+    // Step 7: Persist the spend request with its initial status and decision metadata.
+    // settlementAsset/receiveAsset are stored when the agent declared a cross-currency
+    // intent (Stellar path payment); kept null for plain same-asset transfers.
     const spendRequest = await app.prisma.spendRequest.create({
       data: {
         companyId: agent.companyId,
@@ -160,6 +162,12 @@ export async function spendRequestsRoutes(app: FastifyInstance) {
         policyDecision: evaluationResult.decision,
         decisionReason: evaluationResult.reason,
         matchedRule: evaluationResult.matchedRule,
+        // Cross-currency fields: only set when receiveAsset is provided AND
+        // differs from currency. Same-asset requests stay null.
+        settlementAsset:
+          body.receiveAsset && body.receiveAsset !== body.currency ? body.currency : null,
+        receiveAsset:
+          body.receiveAsset && body.receiveAsset !== body.currency ? body.receiveAsset : null,
         metadata: body.metadata as Prisma.InputJsonValue,
       },
     });
@@ -355,38 +363,56 @@ export async function spendRequestsRoutes(app: FastifyInstance) {
       const adapter = await getSettlementAdapter(treasury.network);
 
       // Look up the vendor's registered wallet address.
-      // If the vendor is registered in the company's vendor registry, funds go to
-      // their actual wallet — making this a REAL multi-wallet transfer on-chain.
-      // Fallback: if vendor is not registered, fall back to treasury self-transfer
-      // (for demo compatibility — unknown vendors still produce real tx signatures).
+      // First try VendorWallet matching the treasury's network (multi-chain path),
+      // then fall back to legacy Vendor.walletAddress (single-chain back-compat),
+      // then fall back to treasury self-transfer (unknown vendor demo case).
       const vendorRecord = await app.prisma.vendor.findFirst({
         where: {
           companyId: spendRequest.companyId,
           name: { equals: spendRequest.vendor, mode: 'insensitive' },
           status: 'ACTIVE',
         },
+        include: {
+          wallets: {
+            where: { network: treasury.network },
+            take: 1,
+          },
+        },
       });
-      const vendorWallet = vendorRecord?.walletAddress ?? treasury.walletAddress;
+
+      const networkSpecificWallet = vendorRecord?.wallets[0]?.walletAddress;
+      const vendorWallet =
+        networkSpecificWallet ?? vendorRecord?.walletAddress ?? treasury.walletAddress;
 
       // Execute via the chain-agnostic adapter contract.
-      // The asset parameter is honored by chain implementations that need it
-      // (Stellar uses it to select the trustline). Solana TreasuryService
-      // ignores asset and uses its configured USDC mint.
+      // - asset: what the treasury sends (currency on the SpendRequest)
+      // - receiveAsset: optional, set when the agent requested a cross-currency
+      //   path payment (Stellar). When provided + different from asset, the
+      //   Stellar adapter routes to pathPaymentStrictReceive.
       const result = await adapter.transfer({
         fromEncryptedSecret: treasury.encryptedSecret,
         toPublicKey: vendorWallet,
         amount: Number(spendRequest.amount),
         asset: spendRequest.currency,
+        ...(spendRequest.receiveAsset ? { receiveAsset: spendRequest.receiveAsset } : {}),
       });
 
-      // Update the SpendRequest with the on-chain proof
+      // Update the SpendRequest with the on-chain proof.
+      // Path payment metadata (path, sourceAmount, conversionRate) is captured
+      // when the chain implementation populated result.pathPayment.
       const updated = await app.prisma.spendRequest.update({
         where: { id: spendRequest.id },
         data: {
           status: 'EXECUTED',
-          txSignature: result.signature,           // Solana Explorer-verifiable signature
-          explorerUrl: result.explorerUrl,         // Direct link to the transaction
+          txSignature: result.signature,           // Solana sig OR Stellar tx hash
+          explorerUrl: result.explorerUrl,         // Solana Explorer or stellar.expert link
           vendorWalletAddress: vendorWallet,       // Record where funds actually went
+          ...(result.pathPayment
+            ? {
+                conversionRate: result.pathPayment.conversionRate,
+                pathPaymentPath: result.pathPayment.path as Prisma.InputJsonValue,
+              }
+            : {}),
         },
       });
 
@@ -402,6 +428,15 @@ export async function spendRequestsRoutes(app: FastifyInstance) {
           txSignature: result.signature,
           explorerUrl: result.explorerUrl,
           amount: spendRequest.amount,
+          ...(result.pathPayment
+            ? {
+                pathPayment: {
+                  path: result.pathPayment.path,
+                  sourceAmount: result.pathPayment.sourceAmount,
+                  conversionRate: result.pathPayment.conversionRate,
+                },
+              }
+            : {}),
         },
       });
 
