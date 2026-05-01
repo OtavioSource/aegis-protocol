@@ -38,14 +38,28 @@
  *      Implemented in path-payments.ts; transfer() routes there when source ≠ dest asset.
  */
 
-import { Horizon, Keypair, Operation, TransactionBuilder, Asset, BASE_FEE } from '@stellar/stellar-sdk';
+import {
+  Horizon,
+  Keypair,
+  Operation,
+  TransactionBuilder,
+  Asset,
+  BASE_FEE,
+} from '@stellar/stellar-sdk';
 import type {
   SettlementAdapter,
   AdapterTransferParams,
   AdapterTransferResult,
   AdapterWalletInfo,
 } from '@aegis/shared';
-import { horizonUrl, networkPassphrase, stellarExpertTxUrl, type StellarNetwork } from './constants.js';
+import {
+  horizonUrl,
+  networkPassphrase,
+  stellarExpertTxUrl,
+  type StellarNetwork,
+} from './constants.js';
+import { getAsset } from './assets.js';
+import { hasTrustline } from './trustlines.js';
 
 export class StellarTreasuryService implements SettlementAdapter {
   private server: Horizon.Server;
@@ -70,11 +84,19 @@ export class StellarTreasuryService implements SettlementAdapter {
     const kp = Keypair.random();
     return {
       publicKey: kp.publicKey(),
-      // Base64 encode the S... secret string. We could store the raw S... too
-      // since it's already a string, but base64 keeps the storage shape consistent
+      // Base64 encode the S... secret string. Keeps the storage shape consistent
       // with @aegis/solana so the encryptedSecret column is treated identically.
       encryptedSecret: Buffer.from(kp.secret(), 'utf8').toString('base64'),
     };
+  }
+
+  /**
+   * restoreKeypair() — reconstruct a Stellar Keypair from base64-encoded secret.
+   * Private: only used internally for signing transactions.
+   */
+  private restoreKeypair(encryptedSecret: string): Keypair {
+    const secretString = Buffer.from(encryptedSecret, 'base64').toString('utf8');
+    return Keypair.fromSecret(secretString);
   }
 
   /**
@@ -91,7 +113,29 @@ export class StellarTreasuryService implements SettlementAdapter {
       const native = account.balances.find((b) => b.asset_type === 'native');
       return native ? parseFloat(native.balance) : 0;
     } catch {
-      // 404 from Horizon → account doesn't exist yet
+      return 0;
+    }
+  }
+
+  /**
+   * getAssetBalance() — balance of a specific (code, issuer) asset on this account.
+   *
+   * Returns 0 if the account doesn't exist or has no trustline for the asset.
+   * Asset-aware version of getBalance() — preferred when checking USDC/EURC.
+   */
+  async getAssetBalance(walletAddress: string, asset: Asset): Promise<number> {
+    if (asset.isNative()) return this.getBalance(walletAddress);
+
+    try {
+      const account = await this.server.loadAccount(walletAddress);
+      const match = account.balances.find((b) => {
+        // Filter out native (XLM) and liquidity pool shares — only credit_alphanum4/12
+        // entries carry asset_code + asset_issuer fields.
+        if (b.asset_type === 'native' || b.asset_type === 'liquidity_pool_shares') return false;
+        return b.asset_code === asset.code && b.asset_issuer === asset.issuer;
+      });
+      return match ? parseFloat(match.balance) : 0;
+    } catch {
       return 0;
     }
   }
@@ -99,24 +143,64 @@ export class StellarTreasuryService implements SettlementAdapter {
   /**
    * transfer() — SettlementAdapter contract method.
    *
-   * MVP IMPLEMENTATION (Phase 3): same-asset transfer (USDC → USDC, XLM → XLM).
-   * Phase 4 will route to path-payments.ts when source asset ≠ destination asset.
+   * Phase 3 (current): same-asset transfers via Operation.payment.
+   *   - XLM → XLM: native transfer
+   *   - USDC → USDC: trustline-based transfer (recipient must have trustline)
    *
-   * Currently throws if asset is non-XLM (placeholder until Phase 3 wires up
-   * trustline-aware payment + Phase 4 wires up path payments).
+   * Phase 4 (future): when receiveAsset is provided and differs from asset,
+   * route to path-payments.ts for cross-currency atomic swap via Stellar DEX.
+   *
+   * Pre-checks the recipient has a trustline for non-XLM assets — fails fast
+   * with a clear error instead of submitting a doomed transaction.
    */
   async transfer(params: AdapterTransferParams): Promise<AdapterTransferResult> {
-    // TODO Phase 3: wire up the actual payment flow
-    // TODO Phase 4: detect source ≠ dest and route to executePathPayment
-    throw new Error(
-      `StellarTreasuryService.transfer() not yet implemented. ` +
-      `Will be wired in Phase 3 (same-asset) + Phase 4 (path payments). ` +
-      `Params received: ${JSON.stringify({
-        to: params.toPublicKey,
-        amount: params.amount,
-        asset: params.asset,
-      })}`,
+    const sourceKp = this.restoreKeypair(params.fromEncryptedSecret);
+    const asset = getAsset(params.asset, this.network);
+
+    // Pre-check: recipient must have a trustline for non-native assets.
+    // Submitting without trustline would fail with op_no_trust on-chain — we
+    // catch it here for a clearer error message and to save the gas.
+    if (!asset.isNative()) {
+      const trusted = await hasTrustline({
+        server: this.server,
+        accountAddress: params.toPublicKey,
+        asset,
+      });
+      if (!trusted) {
+        throw new Error(
+          `Recipient ${params.toPublicKey} has no trustline for ${asset.code} ` +
+            `(issuer ${asset.issuer}). The vendor must establish a trustline ` +
+            `before receiving this asset.`,
+        );
+      }
+    }
+
+    const sourceAccount = await this.server.loadAccount(sourceKp.publicKey());
+
+    const builder = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: networkPassphrase(this.network),
+    });
+
+    builder.addOperation(
+      Operation.payment({
+        destination: params.toPublicKey,
+        asset,
+        // Stellar represents amounts as decimal strings with up to 7 places.
+        // Number → string conversion truncates safely for typical USDC values.
+        amount: params.amount.toFixed(7),
+      }),
     );
+
+    const tx = builder.setTimeout(30).build();
+    tx.sign(sourceKp);
+
+    const result = await this.server.submitTransaction(tx);
+
+    return {
+      signature: result.hash,
+      explorerUrl: stellarExpertTxUrl(result.hash, this.network),
+    };
   }
 
   /**
@@ -132,7 +216,7 @@ export class StellarTreasuryService implements SettlementAdapter {
   async freeze(walletAddress: string): Promise<void> {
     console.log(
       `[aegis:stellar:freeze] Treasury ${walletAddress} frozen (DB-level enforcement only). ` +
-      `On-chain clawback requires AUTH_REVOCABLE issuer flag — not enabled in MVP.`,
+        `On-chain clawback requires AUTH_REVOCABLE issuer flag — not enabled in MVP.`,
     );
   }
 
@@ -159,50 +243,17 @@ export class StellarTreasuryService implements SettlementAdapter {
 
   /**
    * getServer() — Horizon server reference for path-payments and other modules.
-   * Kept package-private (only re-exported within @aegis/stellar).
+   * Kept package-scoped (only re-exported within @aegis/stellar).
    */
   getServer(): Horizon.Server {
     return this.server;
   }
 
-  /** Not part of SettlementAdapter — Stellar-specific helpers exposed for path-payments.ts */
+  /** Stellar-specific helper exposed for path-payments.ts and scripts. */
   buildExplorerUrl(txHash: string): string {
     return stellarExpertTxUrl(txHash, this.network);
   }
-
-  // Re-export commonly-used SDK pieces so consumers don't have to import
-  // @stellar/stellar-sdk separately.
-  static signAndSubmit = signAndSubmit;
 }
 
-/**
- * signAndSubmit() — common helper to sign + submit a Stellar transaction.
- * Used by path-payments.ts and the trustlines helper. Centralized for retry
- * logic and consistent error handling.
- */
-export async function signAndSubmit(params: {
-  server: Horizon.Server;
-  network: StellarNetwork;
-  sourceAccount: Awaited<ReturnType<Horizon.Server['loadAccount']>>;
-  signer: Keypair;
-  operations: ReturnType<typeof Operation.payment>[];
-  memo?: string;
-}): Promise<string> {
-  const builder = new TransactionBuilder(params.sourceAccount, {
-    fee: BASE_FEE,
-    networkPassphrase: networkPassphrase(params.network),
-  });
-
-  for (const op of params.operations) {
-    builder.addOperation(op);
-  }
-
-  const tx = builder.setTimeout(30).build();
-  tx.sign(params.signer);
-
-  const result = await params.server.submitTransaction(tx);
-  return result.hash;
-}
-
-// re-export Asset constructor so callers can use it without importing the SDK
+// Re-export Asset constructor so callers can use it without importing the SDK directly.
 export { Asset };

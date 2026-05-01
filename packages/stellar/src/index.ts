@@ -8,7 +8,7 @@
  * via getSettlementAdapter() factory based on treasury.network.
  */
 
-export { StellarTreasuryService, signAndSubmit, Asset } from './treasury.js';
+export { StellarTreasuryService, Asset } from './treasury.js';
 export {
   horizonUrl,
   networkPassphrase,
@@ -19,3 +19,7 @@ export {
   STELLAR_FRIENDBOT_URL,
 } from './constants.js';
 export type { StellarNetwork } from './constants.js';
+export { fundTestnetAccount } from './friendbot.js';
+export type { FriendbotResult } from './friendbot.js';
+export { establishTrustline, hasTrustline } from './trustlines.js';
+export { getAsset, isNativeAsset } from './assets.js';
