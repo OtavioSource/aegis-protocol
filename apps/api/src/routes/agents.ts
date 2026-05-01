@@ -59,8 +59,8 @@ import {
   AuditEventType,
   ActorType,
 } from '@aegis/shared';
-import { TreasuryService } from '@aegis/solana';
 import { createAuditLog } from '../services/audit.js';
+import { getSettlementAdapter } from '../services/settlement.js';
 
 /**
  * generateApiKey() — creates a new random API key.
@@ -256,12 +256,12 @@ export async function agentsRoutes(app: FastifyInstance) {
               where: { id: agent.treasuryId },
               data: { status: 'FROZEN' },
             });
-            // Execute on-chain sweep via Permanent Delegate (async, may fail gracefully)
-            const treasuryService = new TreasuryService(
-              treasury.network as 'devnet' | 'mainnet-beta',
-            );
-            await treasuryService.freezeTreasury(treasury.walletAddress);
-            onChainFreezeSignature = 'executed'; // freezeTreasury logs the actual tx
+            // Execute on-chain sweep via the settlement adapter.
+            // Solana: Permanent Delegate sweeps tokens to quarantine.
+            // Stellar: DB-only freeze in MVP (clawback requires AUTH_REVOCABLE).
+            const adapter = await getSettlementAdapter(treasury.network);
+            await adapter.freeze(treasury.walletAddress);
+            onChainFreezeSignature = 'executed'; // adapter.freeze logs the actual tx
           }
         } catch (err) {
           // On-chain freeze failure does NOT roll back the kill switch.

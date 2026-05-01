@@ -48,9 +48,10 @@
 
 import type { FastifyInstance } from 'fastify';
 import { CreateCompanySchema, CreateTreasurySchema } from '@aegis/shared';
-import { TreasuryService, fundTreasuryForDemo } from '@aegis/solana';
+import { fundTreasuryForDemo } from '@aegis/solana';
 import { AuditEventType, ActorType } from '@aegis/shared';
 import { createAuditLog } from '../services/audit.js';
+import { getSettlementAdapter } from '../services/settlement.js';
 
 export async function companiesRoutes(app: FastifyInstance) {
   // ─── POST /companies ──────────────────────────────────────────────────────
@@ -91,9 +92,11 @@ export async function companiesRoutes(app: FastifyInstance) {
     const company = await app.prisma.company.findUnique({ where: { id: companyId } });
     if (!company) return reply.notFound('Company not found');
 
-    // Generate a fresh Solana keypair for this treasury
-    const treasuryService = new TreasuryService(body.network);
-    const wallet = treasuryService.createWallet();
+    // Generate a fresh wallet for this treasury via the chain-agnostic adapter.
+    // The factory routes to @aegis/solana for Solana networks or @aegis/stellar
+    // for Stellar networks. createWallet() returns the same shape regardless.
+    const adapter = await getSettlementAdapter(body.network);
+    const wallet = adapter.createWallet();
 
     const treasury = await app.prisma.treasury.create({
       data: {

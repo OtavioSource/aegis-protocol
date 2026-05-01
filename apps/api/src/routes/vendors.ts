@@ -45,13 +45,27 @@ export async function vendorsRoutes(app: FastifyInstance) {
       });
       if (existing) return reply.conflict(`Vendor '${body.name}' already registered`);
 
+      // Resolve wallet address from either initialWallet (preferred, multi-chain)
+      // or top-level walletAddress (legacy Solana-only flow). Schema guarantees
+      // at least one is provided in practice — but we double-check defensively
+      // because both are technically optional in the Zod schema.
+      const walletAddress = body.initialWallet?.walletAddress ?? body.walletAddress;
+      if (!walletAddress) {
+        return reply.badRequest(
+          'Vendor must include either `initialWallet.walletAddress` or `walletAddress`',
+        );
+      }
+
       const vendor = await app.prisma.vendor.create({
         data: {
           companyId,
           name: body.name,
-          walletAddress: body.walletAddress,
+          walletAddress,                                   // Vendor.walletAddress kept for back-compat
           description: body.description ?? null,
           status: 'ACTIVE',
+          // VendorWallet record creation lives in Phase 5 (proper CRUD).
+          // For now Vendor.walletAddress is the source of truth for both
+          // Solana and Stellar flows.
         },
       });
 

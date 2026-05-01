@@ -189,15 +189,42 @@ export enum SolanaNetwork {
 }
 
 /**
+ * SettlementNetwork — chain identifier for any treasury or vendor wallet.
+ *
+ * Superset of SolanaNetwork — extended with Stellar networks for the
+ * cross-currency path payment use case. Used by the adapter factory to
+ * route operations to the right chain implementation.
+ *
+ * Solana:
+ *   SOLANA_DEVNET   — Token-2022 Permanent Delegate, cNFT receipts
+ *   SOLANA_MAINNET  — production Solana
+ *
+ * Stellar:
+ *   STELLAR_TESTNET — Friendbot funding, custom asset issuers for demo
+ *   STELLAR_MAINNET — production Stellar with real USDC/EURC anchors
+ */
+export enum SettlementNetwork {
+  SOLANA_DEVNET = 'devnet',
+  SOLANA_MAINNET = 'mainnet-beta',
+  STELLAR_TESTNET = 'stellar-testnet',
+  STELLAR_MAINNET = 'stellar-mainnet',
+}
+
+/**
  * Currency — supported payment currencies.
  *
- * USDC: USD Coin — the primary currency for Aegis Protocol payments.
- *       Chosen for stability (pegged to $1) and wide SPL token support.
- *       On devnet: custom demo mint. On mainnet: Circle's USDC.
- * SOL:  Native Solana token. Supported for future SOL-denominated budgets.
- *       Currently used only for gas fees, not as a payment currency.
+ * USDC: USD Coin — primary stablecoin across both Solana and Stellar.
+ *       Solana devnet: custom demo Token-2022 mint.
+ *       Stellar testnet: Circle USDC issuer (or demo issuer).
+ * SOL:  Native Solana token (gas only, not used as payment currency).
+ * XLM:  Native Stellar token. Used for gas, account reserves, and as
+ *       intermediate liquidity asset on path payment routes.
+ * EURC: Circle Euro stablecoin on Stellar. Common receiveAsset for
+ *       European vendors. Powers the cross-currency path payment demo.
  */
 export enum Currency {
   USDC = 'USDC',
   SOL = 'SOL',
+  XLM = 'XLM',
+  EURC = 'EURC',
 }

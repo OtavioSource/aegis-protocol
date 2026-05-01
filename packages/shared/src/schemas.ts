@@ -1,5 +1,26 @@
 import { z } from 'zod';
 
+// ─── Settlement Network ───────────────────────────────────────────────────────
+//
+// Shared enum-like schema for chain identifiers. Used by Treasury and
+// VendorWallet schemas. Add new chains here as adapters are implemented.
+
+export const SettlementNetworkSchema = z.enum([
+  'devnet',           // Solana devnet
+  'mainnet-beta',     // Solana mainnet
+  'stellar-testnet',  // Stellar testnet (Friendbot funding)
+  'stellar-mainnet',  // Stellar mainnet
+]);
+
+export type SettlementNetworkInput = z.infer<typeof SettlementNetworkSchema>;
+
+// Currency codes supported across chains.
+// USDC: Circle USD stablecoin (Solana SPL + Stellar asset).
+// SOL:  native Solana token (gas).
+// XLM:  native Stellar token (gas + base liquidity asset on DEX paths).
+// EURC: Circle Euro stablecoin (Stellar — used as receiveAsset for European vendors).
+export const CurrencySchema = z.enum(['USDC', 'SOL', 'XLM', 'EURC']);
+
 // ─── Company ─────────────────────────────────────────────────────────────────
 
 export const CreateCompanySchema = z.object({
@@ -13,8 +34,8 @@ export const CreateCompanySchema = z.object({
 
 export const CreateTreasurySchema = z.object({
   name: z.string().min(1).max(100),
-  network: z.enum(['devnet', 'mainnet-beta']).default('devnet'),
-  baseCurrency: z.enum(['USDC', 'SOL']).default('USDC'),
+  network: SettlementNetworkSchema.default('devnet'),
+  baseCurrency: CurrencySchema.default('USDC'),
 });
 
 // ─── Agent ───────────────────────────────────────────────────────────────────
@@ -58,7 +79,7 @@ export const CreateBudgetSchema = z.object({
   dailyLimit: z.number().positive(),
   monthlyLimit: z.number().positive(),
   perTransactionLimit: z.number().positive(),
-  currency: z.enum(['USDC', 'SOL']).default('USDC'),
+  currency: CurrencySchema.default('USDC'),
 });
 
 // ─── Spend Request ───────────────────────────────────────────────────────────
@@ -67,7 +88,11 @@ export const CreateSpendRequestSchema = z.object({
   actionType: z.string().min(1).max(100),
   vendor: z.string().min(1).max(100),
   amount: z.number().positive(),
-  currency: z.enum(['USDC', 'SOL']).default('USDC'),
+  currency: CurrencySchema.default('USDC'),
+  // receiveAsset (Stellar path payment): asset the vendor receives.
+  // If omitted or equal to currency → same-asset transfer (no path payment).
+  // If different → triggers Stellar pathPaymentStrictReceive at execute time.
+  receiveAsset: CurrencySchema.optional(),
   reason: z.string().min(1).max(500),
   reference: z.string().max(200).optional(),
   metadata: z.record(z.unknown()).default({}),
@@ -80,17 +105,41 @@ export const ApprovalDecisionSchema = z.object({
 });
 
 // ─── Vendor ──────────────────────────────────────────────────────────────────
+//
+// Wallet address validation accepts both Solana (32-44 base58) and Stellar
+// (56 chars starting with G). Stricter per-network validation is enforced
+// at the chain adapter layer (Keypair construction will throw on invalid input).
+
+const WalletAddressSchema = z.string().min(32).max(56);
 
 export const CreateVendorSchema = z.object({
   name: z.string().min(1).max(100),
-  walletAddress: z.string().min(32).max(44), // Solana base58 pubkey length
   description: z.string().max(300).optional(),
+  // Required initial wallet — every vendor must have at least one wallet
+  // on at least one chain to receive payments.
+  initialWallet: z
+    .object({
+      network: SettlementNetworkSchema,
+      walletAddress: WalletAddressSchema,
+      trustedAssets: z.array(z.string()).optional(),
+    })
+    .optional(),
+  // DEPRECATED: top-level walletAddress kept for back-compat with existing
+  // Solana-only callers. If both provided, initialWallet wins.
+  walletAddress: WalletAddressSchema.optional(),
 });
 
 export const UpdateVendorSchema = z.object({
-  walletAddress: z.string().min(32).max(44).optional(),
+  walletAddress: WalletAddressSchema.optional(),
   description: z.string().max(300).optional(),
   status: z.enum(['ACTIVE', 'BLOCKED']).optional(),
+});
+
+// Add a new wallet to an existing vendor (e.g. after registering on Stellar).
+export const AddVendorWalletSchema = z.object({
+  network: SettlementNetworkSchema,
+  walletAddress: WalletAddressSchema,
+  trustedAssets: z.array(z.string()).optional(),
 });
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -129,5 +178,6 @@ export type CreateSpendRequestInput = z.infer<typeof CreateSpendRequestSchema>;
 export type ApprovalDecisionInput = z.infer<typeof ApprovalDecisionSchema>;
 export type CreateVendorInput = z.infer<typeof CreateVendorSchema>;
 export type UpdateVendorInput = z.infer<typeof UpdateVendorSchema>;
+export type AddVendorWalletInput = z.infer<typeof AddVendorWalletSchema>;
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;

@@ -85,21 +85,52 @@ model Vendor {
   id            String       @id @default(cuid())
   companyId     String
   name          String                                 // Must match vendor names in policy rules
-  walletAddress String                                 // Solana public key (base58) — transfer destination
+  walletAddress String                                 // DEPRECATED — kept for back-compat with Solana-only flow.
+                                                        //   New code reads from VendorWallet[network=...].
+                                                        //   Populated as VendorWallet[network=devnet] when present.
   description   String?                               // Optional: what this vendor provides
   status        VendorStatus @default(ACTIVE)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  wallets VendorWallet[]                              // 1:N — one wallet per chain
 
-  @@unique([companyId, name])  // One wallet per vendor name per company
+  @@unique([companyId, name])  // One vendor name per company
   @@map("vendors")
 }
 
 enum VendorStatus {
   ACTIVE   // Vendor is operational — payments allowed
   BLOCKED  // Vendor is blocked — payments rejected (belt-and-suspenders with deny list)
+}
+
+// ─── VendorWallet ─────────────────────────────────────────────────────────────
+// A vendor's wallet address on a specific settlement network. One vendor can
+// have multiple wallets (one per chain) — the same OpenAI vendor might have a
+// Solana wallet for USDC payments and a Stellar G... wallet for cross-currency
+// payments (USDC → EURC via path payment).
+//
+// network values: 'devnet' | 'mainnet-beta' | 'stellar-testnet' | 'stellar-mainnet'
+//
+// trustedAssets (Stellar-only): list of asset codes the wallet has trustlines for.
+// Solana wallets ignore this field — Solana ATAs are created on demand.
+// Stellar wallets MUST have a trustline established for any non-XLM asset
+// before they can receive it. Aegis pre-checks before path payment execution.
+
+model VendorWallet {
+  id            String   @id @default(cuid())
+  vendorId      String
+  network       String                              // settlement network identifier
+  walletAddress String                              // Solana base58 (32-44) OR Stellar G... (56)
+  trustedAssets Json     @default("[]")             // Stellar: ["USDC","EURC"]; Solana: ignored
+  createdAt     DateTime @default(now())
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, network])  // One wallet per vendor per chain
+  @@index([network, walletAddress])
+  @@map("vendor_wallets")
 }
 
 // ─── Treasury ─────────────────────────────────────────────────────────────────
@@ -269,9 +300,16 @@ model SpendRequest {
   policyDecision  String?                                  // Policy engine output (immutable after creation)
   decisionReason  String?                                  // Human-readable explanation of the decision
   matchedRule     String?                                  // Which rule triggered: 'kill_switch', 'vendor_denied', etc.
-  txSignature         String?                                  // Solana tx signature (set after /execute)
-  explorerUrl         String?                                  // Direct Solana Explorer link (set after /execute)
-  vendorWalletAddress String?                                  // Vendor's Solana wallet that received the payment
+  txSignature         String?                                  // Solana tx signature OR Stellar tx hash
+  explorerUrl         String?                                  // Direct Explorer link (Solana Explorer / stellar.expert)
+  vendorWalletAddress String?                                  // Vendor wallet that received the payment (Solana base58 or Stellar G...)
+  // ─── Path payment fields (Stellar cross-currency) ──────────────────────
+  // Used when source asset (settlement) differs from receive asset (vendor).
+  // For same-asset payments (Solana or Stellar XLM→XLM), these stay null.
+  settlementAsset     String?                                  // Asset agent pays from treasury (e.g. 'USDC')
+  receiveAsset        String?                                  // Asset vendor receives (e.g. 'EURC')
+  conversionRate      Decimal?           @db.Decimal(18, 6)   // Effective rate of the swap (sourceAmount/destAmount)
+  pathPaymentPath     Json?                                    // Intermediate assets used by Stellar DEX path
   metadata            Json               @default("{}")        // Agent-provided context: model used, trace ID, etc.
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt

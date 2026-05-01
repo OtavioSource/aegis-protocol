@@ -52,10 +52,11 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { CreateSpendRequestSchema, AuditEventType, ActorType, AgentStatus, Currency, PolicyDecision } from '@aegis/shared';
 import { evaluate } from '@aegis/policy-engine';
-import { TreasuryService, createCompanyMerkleTree, mintDecisionReceipt } from '@aegis/solana';
+import { createCompanyMerkleTree, mintDecisionReceipt } from '@aegis/solana';
 import { hashApiKey } from '../middleware/auth.js';
 import { createAuditLog } from '../services/audit.js';
 import { notifyApprovalNeeded } from '../services/notify.js';
+import { getSettlementAdapter } from '../services/settlement.js';
 
 export async function spendRequestsRoutes(app: FastifyInstance) {
   // ─── POST /spend-requests ─────────────────────────────────────────────────
@@ -349,10 +350,11 @@ export async function spendRequestsRoutes(app: FastifyInstance) {
     if (treasury.status === 'FROZEN') return reply.badRequest('Treasury is frozen');
 
     try {
-      // Instantiate TreasuryService with the correct network (devnet in MVP)
-      const treasuryService = new TreasuryService(treasury.network as 'devnet' | 'mainnet-beta');
+      // Resolve the right settlement adapter for this treasury's network.
+      // Routes Solana → @aegis/solana, Stellar → @aegis/stellar transparently.
+      const adapter = await getSettlementAdapter(treasury.network);
 
-      // Look up the vendor's registered Solana wallet address.
+      // Look up the vendor's registered wallet address.
       // If the vendor is registered in the company's vendor registry, funds go to
       // their actual wallet — making this a REAL multi-wallet transfer on-chain.
       // Fallback: if vendor is not registered, fall back to treasury self-transfer
@@ -366,11 +368,16 @@ export async function spendRequestsRoutes(app: FastifyInstance) {
       });
       const vendorWallet = vendorRecord?.walletAddress ?? treasury.walletAddress;
 
-      const result = await treasuryService.transferUsdc(
-        treasury.encryptedSecret,  // treasury keypair (base64-encoded secret)
-        vendorWallet,              // recipient: vendor's registered wallet or treasury fallback
-        Number(spendRequest.amount),
-      );
+      // Execute via the chain-agnostic adapter contract.
+      // The asset parameter is honored by chain implementations that need it
+      // (Stellar uses it to select the trustline). Solana TreasuryService
+      // ignores asset and uses its configured USDC mint.
+      const result = await adapter.transfer({
+        fromEncryptedSecret: treasury.encryptedSecret,
+        toPublicKey: vendorWallet,
+        amount: Number(spendRequest.amount),
+        asset: spendRequest.currency,
+      });
 
       // Update the SpendRequest with the on-chain proof
       const updated = await app.prisma.spendRequest.update({

@@ -42,6 +42,9 @@ importers:
       '@aegis/solana':
         specifier: workspace:*
         version: link:../../packages/solana
+      '@aegis/stellar':
+        specifier: workspace:*
+        version: link:../../packages/stellar
       '@fastify/cors':
         specifier: ^10.0.2
         version: 10.1.0
