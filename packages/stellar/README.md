@@ -43,42 +43,75 @@ apps/api → getSettlementAdapter(treasury.network) → StellarTreasuryService
 | `constants.ts` | Horizon URLs, network passphrases, stellar.expert links |
 | `scripts/setup-demo.ts` | One-shot script to provision the cross-currency demo on testnet |
 
-## Quickstart (cross-currency demo)
+## Quickstart — end-to-end cross-currency demo (4 commands)
+
+The full demo (provision testnet + provision DB + run cross-currency payment)
+fits in four commands. No manual DB editing, no Prisma Studio, no copy-paste
+of secrets between scripts.
 
 ```bash
-# 1. Install + build the workspace
-pnpm install
-pnpm --filter @aegis/stellar build
+# 1. Install + build (one-time)
+pnpm install && pnpm --filter @aegis/stellar build
 
-# 2. Provision testnet accounts + DEX liquidity (~30 seconds)
+# 2. Apply the multi-chain Prisma migration (one-time)
+pnpm --filter @aegis/api db:migrate
+
+# 3. Provision Stellar testnet accounts + DEX liquidity (~30s)
+#    Writes packages/stellar/.demo-state.json with all account info
 pnpm --filter @aegis/stellar setup-demo
+#    → Adds STELLAR_DEMO_USDC_ISSUER + STELLAR_DEMO_EURC_ISSUER (and *_SECRET)
+#      to apps/api/.env per the printed instructions.
 
-# 3. Copy the printed STELLAR_DEMO_*_ISSUER lines into apps/api/.env
+# 4. Provision the DB (company + treasury + vendor + agent + policy + budget)
+#    from the .demo-state.json — fully automated, no manual data entry.
+pnpm --filter @aegis/api db:seed-stellar
+#    → Prints the API key for the demo agent.
 
-# 4. Start the API
+# Then start the server and submit a cross-currency spend request:
 pnpm --filter @aegis/api dev
 
-# 5. Quote a path payment
-curl 'http://localhost:3001/stellar/path-quote?sourceAsset=USDC&receiveAsset=EURC&amount=25&network=stellar-testnet&fromAccount=G...'
-# → { sourceMax: 27.50, effectiveRate: 1.10, path: ['XLM'], validUntil: ... }
-
-# 6. Submit a SpendRequest with cross-currency intent
 curl -X POST http://localhost:3001/spend-requests \
-  -H "Authorization: Bearer cr_..." \
+  -H "Authorization: Bearer <API key from step 4>" \
   -H "Content-Type: application/json" \
   -d '{
-    "actionType": "purchase_api_access",
-    "vendor": "OpenAI EU",
-    "amount": 25,
-    "currency": "USDC",
-    "receiveAsset": "EURC",
-    "reason": "GPT-4 credits for European campaign"
+    "actionType":"purchase_api_access",
+    "vendor":"OpenAI EU",
+    "amount":25,
+    "currency":"USDC",
+    "receiveAsset":"EURC",
+    "reason":"GPT-4 credits for European campaign"
   }'
 
-# 7. Execute (path payment fires)
+# Then execute the spend request — the path payment fires:
 curl -X POST http://localhost:3001/spend-requests/<id>/execute \
-  -H "Authorization: Bearer cr_..."
-# Response includes explorerUrl pointing to stellar.expert showing the atomic swap
+  -H "Authorization: Bearer <API key>"
+# Response includes explorerUrl pointing to stellar.expert showing the atomic swap.
+```
+
+## Bringing your own wallet (no setup-demo)
+
+If you have an existing Stellar account funded with USDC and want to use it
+as a treasury without going through setup-demo:
+
+```bash
+# Create a treasury importing your existing keypair:
+curl -X POST http://localhost:3001/companies/<companyId>/treasuries \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Stellar Treasury",
+    "network": "stellar-testnet",
+    "baseCurrency": "USDC",
+    "importedSecret": "<S... or base64 of S...>"
+  }'
+
+# Establish a trustline to a non-XLM asset later (e.g. EURC):
+curl -X POST http://localhost:3001/companies/<companyId>/treasuries/<treasuryId>/trustlines \
+  -H "Content-Type: application/json" \
+  -d '{ "assetCode": "EURC", "assetIssuer": "G..." }'
+
+# Or use fund-demo for a one-shot Friendbot + trustline + USDC funding:
+curl -X POST http://localhost:3001/companies/<companyId>/treasuries/<treasuryId>/fund-demo \
+  -H "Content-Type: application/json" -d '{"amount":1000}'
 ```
 
 ## Environment variables

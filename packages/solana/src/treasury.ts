@@ -135,6 +135,30 @@ export class TreasuryService implements SettlementAdapter {
   }
 
   /**
+   * importWallet() — accept an existing Solana secret and return wallet info.
+   *
+   * Expects base64-encoded 64-byte secret key (the format Aegis stores in
+   * encryptedSecret). Throws if the secret can't be decoded into a valid Keypair.
+   *
+   * Used by POST /companies/:id/treasuries when the caller provides
+   * `importedSecret` — bringing an existing pre-funded wallet into Aegis
+   * instead of generating a fresh one.
+   */
+  importWallet(secret: string): WalletInfo {
+    const secretKey = Buffer.from(secret.trim(), 'base64');
+    if (secretKey.length !== 64) {
+      throw new Error(
+        `Invalid Solana secret: expected 64 bytes (base64), got ${secretKey.length}`,
+      );
+    }
+    const keypair = Keypair.fromSecretKey(secretKey);
+    return {
+      publicKey: keypair.publicKey.toBase58(),
+      encryptedSecret: secret.trim(),
+    };
+  }
+
+  /**
    * restoreKeypair() — reconstruct a Keypair from stored secret.
    * Private: only used internally for signing transactions.
    */

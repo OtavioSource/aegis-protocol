@@ -11,6 +11,7 @@
     "db:generate": "prisma generate --schema ../../prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema ../../prisma/schema.prisma",
     "db:seed": "tsx src/seed.ts",
+    "db:seed-stellar": "tsx src/scripts/seed-stellar.ts",
     "db:studio": "prisma studio --schema ../../prisma/schema.prisma",
     "demo": "tsx --env-file=.env src/scripts/demo.ts"
   },

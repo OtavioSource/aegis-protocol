@@ -49,6 +49,7 @@
 import type { FastifyInstance } from 'fastify';
 import { CreateCompanySchema, CreateTreasurySchema } from '@aegis/shared';
 import { fundTreasuryForDemo } from '@aegis/solana';
+import { fundStellarTreasuryForDemo, establishStellarTrustline } from '@aegis/stellar';
 import { AuditEventType, ActorType } from '@aegis/shared';
 import { createAuditLog } from '../services/audit.js';
 import { getSettlementAdapter } from '../services/settlement.js';
@@ -92,11 +93,23 @@ export async function companiesRoutes(app: FastifyInstance) {
     const company = await app.prisma.company.findUnique({ where: { id: companyId } });
     if (!company) return reply.notFound('Company not found');
 
-    // Generate a fresh wallet for this treasury via the chain-agnostic adapter.
-    // The factory routes to @aegis/solana for Solana networks or @aegis/stellar
-    // for Stellar networks. createWallet() returns the same shape regardless.
+    // Resolve the chain adapter then either import a pre-existing wallet
+    // (when caller provided importedSecret) or generate a fresh keypair.
+    // Importing supports the "bring your own funded wallet" flow used by
+    // setup-demo and by real customers migrating existing accounts.
     const adapter = await getSettlementAdapter(body.network);
-    const wallet = adapter.createWallet();
+    let wallet;
+    try {
+      wallet = body.importedSecret
+        ? adapter.importWallet(body.importedSecret)
+        : adapter.createWallet();
+    } catch (err) {
+      return reply.badRequest(
+        `Failed to import wallet for network ${body.network}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
 
     const treasury = await app.prisma.treasury.create({
       data: {
@@ -149,8 +162,50 @@ export async function companiesRoutes(app: FastifyInstance) {
       });
       if (!treasury) return reply.notFound('Treasury not found');
 
+      // Dispatch to the right chain helper based on treasury.network.
+      // Solana devnet → Token-2022 mint + airdrop SOL + mint USDC.
+      // Stellar testnet → Friendbot + trustline + USDC from demo issuer.
+      // Mainnet networks are blocked — fund-demo is testnet/devnet only.
+      if (treasury.network === 'stellar-testnet') {
+        const stellarResult = await fundStellarTreasuryForDemo({
+          network: 'stellar-testnet',
+          treasuryEncryptedSecret: treasury.encryptedSecret,
+          amount,
+          skipFriendbotIfFunded: true,
+        });
+
+        await createAuditLog({
+          prisma: app.prisma,
+          companyId,
+          eventType: AuditEventType.TREASURY_FUNDED,
+          actorType: ActorType.ADMIN,
+          actorId: 'admin',
+          payload: {
+            treasuryId,
+            chain: 'stellar',
+            amount: stellarResult.assetAmount,
+            fundTxHash: stellarResult.fundTxHash,
+            trustlineTxHash: stellarResult.trustlineTxHash,
+            assetTxHash: stellarResult.assetTxHash,
+          },
+        });
+
+        return {
+          treasuryId,
+          chain: 'stellar',
+          walletAddress: treasury.walletAddress,
+          amount: stellarResult.assetAmount,
+          fundTxHash: stellarResult.fundTxHash,
+          fundExplorerUrl: stellarResult.fundExplorerUrl,
+          trustlineTxHash: stellarResult.trustlineTxHash,
+          trustlineExplorerUrl: stellarResult.trustlineExplorerUrl,
+          assetTxHash: stellarResult.assetTxHash,
+          assetExplorerUrl: stellarResult.assetExplorerUrl,
+        };
+      }
+
       // Safety guard: refuse to run against mainnet accidentally
-      if (treasury.network !== 'devnet') return reply.badRequest('fund-demo only works on devnet');
+      if (treasury.network !== 'devnet') return reply.badRequest('fund-demo only works on devnet/stellar-testnet');
 
       // Call the devnet funding utility from @aegis/solana
       // If DEVNET_DEMO_MINT_ADDRESS is set in env, reuses that mint.
@@ -203,6 +258,57 @@ export async function companiesRoutes(app: FastifyInstance) {
         solSignature: result.solSignature,
         mintSignature: result.mintSignature,
         explorerUrl: result.explorerUrl,  // Verify on Solana Explorer
+      };
+    },
+  );
+
+  // ─── POST /companies/:companyId/treasuries/:treasuryId/trustlines ─────────
+  // Stellar-only: establish a trustline so the treasury can receive a non-XLM asset.
+  // Uses the treasury's own keypair (Aegis controls it). Idempotent: returns 200
+  // with `alreadyExisted: true` if the trustline is already set.
+  //
+  // Body: { assetCode: 'USDC', assetIssuer: 'G...' }
+  // Use cases:
+  //   - Adding a new asset support after treasury creation (e.g. EURC trustline
+  //     so the treasury can hold EURC liquidity for fast redemption).
+  //   - One-shot trustline setup outside of fund-demo (e.g. mainnet flow).
+  app.post<{
+    Params: { companyId: string; treasuryId: string };
+    Body: { assetCode?: string; assetIssuer?: string };
+  }>(
+    '/:companyId/treasuries/:treasuryId/trustlines',
+    async (request, reply) => {
+      const { companyId, treasuryId } = request.params;
+      const { assetCode, assetIssuer } = request.body ?? {};
+
+      if (!assetCode || !assetIssuer) {
+        return reply.badRequest('Body must include assetCode and assetIssuer');
+      }
+
+      const treasury = await app.prisma.treasury.findFirst({
+        where: { id: treasuryId, companyId },
+      });
+      if (!treasury) return reply.notFound('Treasury not found');
+
+      if (treasury.network !== 'stellar-testnet' && treasury.network !== 'stellar-mainnet') {
+        return reply.badRequest(
+          `Trustlines are a Stellar concept; treasury network is ${treasury.network}`,
+        );
+      }
+
+      const result = await establishStellarTrustline({
+        network: treasury.network as 'stellar-testnet' | 'stellar-mainnet',
+        treasuryEncryptedSecret: treasury.encryptedSecret,
+        assetCode,
+        assetIssuer,
+      });
+
+      return {
+        treasuryId,
+        walletAddress: treasury.walletAddress,
+        assetCode,
+        assetIssuer,
+        ...result,
       };
     },
   );

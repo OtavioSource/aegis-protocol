@@ -48,6 +48,8 @@ import {
   Asset,
   BASE_FEE,
 } from '@stellar/stellar-sdk';
+import { writeFileSync } from 'fs';
+import { resolve } from 'path';
 import { fundTestnetAccount } from '../friendbot.js';
 import { networkPassphrase, horizonUrl } from '../constants.js';
 
@@ -205,12 +207,43 @@ async function main() {
   logAccount('Treasury (Aegis-managed)', treasury.kp);
   logAccount('Vendor (OpenAI EU)', vendor.kp);
 
-  console.log('\n📝 Next steps:');
+  // ───────────────────────────────────────────────────────────────────
+  // 7. Write state file consumed by apps/api seed-stellar script
+  // ───────────────────────────────────────────────────────────────────
+  // Saved at packages/stellar/.demo-state.json (gitignored). The seed-stellar
+  // script reads this to provision a working company + treasury + vendor +
+  // agent in the Aegis DB without any manual data entry.
+  const state = {
+    network: NETWORK,
+    createdAt: new Date().toISOString(),
+    usdcIssuer: { publicKey: usdcIssuer.kp.publicKey(), secret: usdcIssuer.kp.secret() },
+    eurcIssuer: { publicKey: eurcIssuer.kp.publicKey(), secret: eurcIssuer.kp.secret() },
+    marketMaker: { publicKey: marketMaker.kp.publicKey(), secret: marketMaker.kp.secret() },
+    treasury: { publicKey: treasury.kp.publicKey(), secret: treasury.kp.secret() },
+    vendor: { publicKey: vendor.kp.publicKey(), secret: vendor.kp.secret() },
+  };
+  // Resolve relative to cwd. setup-demo is invoked via `pnpm --filter @aegis/stellar
+  // setup-demo` so cwd is packages/stellar/ — written file lands beside src/.
+  const statePath = resolve(process.cwd(), '.demo-state.json');
+  writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf8');
+  console.log(`\n💾 Demo state written to ${statePath}`);
+  console.log('   (gitignored — contains testnet secrets, never commit)\n');
+
+  console.log('📝 Next steps:');
   console.log('   1. Add STELLAR_DEMO_*_ISSUER lines above to apps/api/.env');
-  console.log('   2. Use the Treasury secret to seed a Stellar treasury in Aegis');
-  console.log('   3. Register vendor with VendorWallet network=stellar-testnet');
-  console.log('   4. Submit a SpendRequest with currency=USDC, receiveAsset=EURC');
-  console.log('   5. Watch the path payment fire and check stellar.expert for the tx\n');
+  console.log('   2. Add STELLAR_DEMO_USDC_ISSUER_SECRET (base64 of issuer secret) to .env:');
+  console.log(
+    `      STELLAR_DEMO_USDC_ISSUER_SECRET=${Buffer.from(
+      usdcIssuer.kp.secret(),
+      'utf8',
+    ).toString('base64')}`,
+  );
+  console.log(`      STELLAR_DEMO_EURC_ISSUER_SECRET=${Buffer.from(
+    eurcIssuer.kp.secret(),
+    'utf8',
+  ).toString('base64')}`);
+  console.log('   3. Run: pnpm --filter @aegis/api db:seed-stellar');
+  console.log('      (this reads .demo-state.json and provisions the full demo in the DB)\n');
 }
 
 main().catch((err) => {

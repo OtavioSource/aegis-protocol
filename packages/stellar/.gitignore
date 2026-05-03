@@ -1,0 +1,11 @@
+# Demo state file produced by setup-demo.ts — contains testnet secrets,
+# never commit. The seed-stellar script reads it to provision the DB.
+.demo-state.json
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Local env overrides
+.env
+.env.local

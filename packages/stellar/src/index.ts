@@ -25,3 +25,5 @@ export { establishTrustline, hasTrustline } from './trustlines.js';
 export { getAsset, isNativeAsset } from './assets.js';
 export { findStrictReceivePath, executePathPayment } from './path-payments.js';
 export type { PathQuote } from './path-payments.js';
+export { fundStellarTreasuryForDemo, establishStellarTrustline } from './testnet-fund.js';
+export type { StellarFundResult } from './testnet-fund.js';

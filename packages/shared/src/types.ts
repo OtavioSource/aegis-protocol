@@ -411,6 +411,18 @@ export type AdapterTransferParams = {
 export interface SettlementAdapter {
   /** Generate a new wallet keypair for a treasury */
   createWallet(): AdapterWalletInfo;
+  /**
+   * Import an existing wallet from its secret. Used by the treasury route
+   * when the caller provides `importedSecret` instead of generating a fresh
+   * keypair (bringing a pre-funded account into Aegis).
+   *
+   * Each chain accepts its native format:
+   *   - Solana: base64 of the 64-byte secret key
+   *   - Stellar: the S... secret string (or base64 of it)
+   *
+   * Throws if the secret can't be parsed for the chain.
+   */
+  importWallet(secret: string): AdapterWalletInfo;
   /** Execute a token transfer from one wallet to another */
   transfer(params: AdapterTransferParams): Promise<AdapterTransferResult>;
   /** Freeze a wallet — revoke spend capability (on-chain or DB-level) */

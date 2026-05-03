@@ -36,6 +36,13 @@ export const CreateTreasurySchema = z.object({
   name: z.string().min(1).max(100),
   network: SettlementNetworkSchema.default('devnet'),
   baseCurrency: CurrencySchema.default('USDC'),
+  // Optional: import an existing wallet instead of generating a fresh one.
+  // Useful when bringing in a pre-funded account (e.g. setup-demo treasury,
+  // or a real customer wallet). The format is chain-specific:
+  //   - Solana:  base64-encoded 64-byte secret key
+  //   - Stellar: the S... secret string OR base64 of it
+  // The chain adapter normalizes whichever encoding is provided.
+  importedSecret: z.string().min(50).max(200).optional(),
 });
 
 // ─── Agent ───────────────────────────────────────────────────────────────────

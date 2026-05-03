@@ -93,6 +93,35 @@ export class StellarTreasuryService implements SettlementAdapter {
   }
 
   /**
+   * importWallet() — accept an existing Stellar secret and return wallet info.
+   *
+   * Accepts either format:
+   *   - Raw S... string (56 chars) — what stellar.org displays
+   *   - Base64 of the S... string — what Aegis stores in encryptedSecret
+   *
+   * The S... format is detected by length (56) and prefix ('S').
+   * Anything else is decoded as base64 first.
+   */
+  importWallet(secret: string): AdapterWalletInfo {
+    const trimmed = secret.trim();
+    let secretString: string;
+    if (trimmed.length === 56 && trimmed.startsWith('S')) {
+      secretString = trimmed;
+    } else {
+      // Assume base64-encoded S... string (storage format)
+      secretString = Buffer.from(trimmed, 'base64').toString('utf8');
+    }
+
+    const kp = Keypair.fromSecret(secretString);
+    return {
+      publicKey: kp.publicKey(),
+      // Always store as base64 internally so the encryptedSecret column
+      // shape stays consistent with createWallet() output.
+      encryptedSecret: Buffer.from(secretString, 'utf8').toString('base64'),
+    };
+  }
+
+  /**
    * restoreKeypair() — reconstruct a Stellar Keypair from base64-encoded secret.
    * Private: only used internally for signing transactions.
    */
