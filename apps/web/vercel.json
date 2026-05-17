@@ -1,6 +1,0 @@
-{
-  "framework": "nextjs",
-  "buildCommand": "cd ../.. && pnpm --filter @aegis/shared build && pnpm --filter @aegis/web build",
-  "installCommand": "pnpm install",
-  "outputDirectory": ".next"
-}
