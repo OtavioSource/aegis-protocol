@@ -1,15 +1,58 @@
+# Dependencies
 node_modules/
+.pnpm-store/
+
+# Build outputs
 dist/
+build/
+out/
 .next/
 .turbo/
+*.tsbuildinfo
+
+# Rust / Soroban
+contracts/**/target/
+contracts/**/Cargo.lock
+
+# Environment (preserva .env.example)
+.env
+.env.local
+.env.*.local
 *.env
 *.env.local
 *.env.production
-.DS_Store
+!.env.example
+!**/.env.example
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing
 coverage/
 .nyc_output/
 test-ledger/
 test-db.mjs
+
+# Prisma
+prisma/migrations/dev.db*
+
+# Stellar / Soroban
+.stellar/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Pessoal / local
 .claude/
 aulas/
