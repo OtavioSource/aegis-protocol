@@ -1,227 +1,179 @@
-# CommandRail
+# CLAUDE.md
 
-## Definition
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-CommandRail is a governance layer for AI agents that need controlled economic autonomy using programmable treasury and payments on Solana.
+@PRD.md
+
+> [PRD.md](PRD.md) is the **single source of truth** for product, persona, architecture, and ADRs (auto-loaded above). When this file conflicts with PRD.md, PRD.md wins. Never revoke or contradict a registered ADR without proposing a new one and getting owner approval.
+
+> The product is **Aegis Protocol**. All package names use the `@aegis/*` scope.
 
 ---
 
-## Purpose
+## Product Scope (read first)
 
-This file guides Claude Code during the implementation of CommandRail.
+Aegis Protocol is a **governance layer** (control plane + REST API) for AI agents that need controlled economic autonomy on Solana. It is **not** an agent framework, an LLM orchestrator, a wallet app, a generic crypto dashboard, or a procurement ERP.
 
-The project must be built as a **credible hackathon MVP with real startup potential**, not as a toy demo.
+### Core loop
+```
+Agent requests spend → Policy evaluates → System decides → cNFT receipt minted → Treasury executes (SPL transfer)
+```
 
-Priority order:
-
+### Priority order when making implementation tradeoffs
 1. clear product narrative
 2. strong governance flow
-3. meaningful Solana relevance
-4. fast MVP execution
+3. meaningful Solana relevance (Solana-native, not cosmetic)
+4. fast hackathon-MVP execution
 5. extensibility after the hackathon
 
----
+### Always frame as
+governance layer for AI agents · economic control plane · controlled autonomy · programmable treasury on Solana.
 
-## Product Scope
+### Never frame as
+AI wallet app · crypto dashboard · chatbot with payments.
 
-CommandRail is **not** an agent framework.
-CommandRail is a **control plane and governance API** for any agent capable of calling an HTTP API.
-
-The system must:
-
-- receive economic action requests from agents
-- evaluate them against company policies
-- approve, reject, or require human approval
-- orchestrate treasury/payment execution via Solana
-- log all decisions for auditability
+### Hackathon
+Solana Frontier Hackathon (Colosseum) — submission deadline **2026-05-11**.
 
 ---
 
-## Core Loop
+## Common Commands
 
-```
-Agent requests spend → Policy evaluates → System decides → Action is audited → Treasury execution is controlled
-```
+All commands run from the repo root unless noted. Node 22+ and pnpm 10+ required.
 
----
-
-## Tech Stack
-
-| Layer | Choice |
-|-------|--------|
-| Monorepo | Turborepo + pnpm |
-| Backend | Fastify + TypeScript + Zod |
-| ORM | Prisma |
-| Database | PostgreSQL |
-| Frontend | Next.js 14+ App Router + Tailwind + shadcn/ui |
-| Auth (agents) | API keys (Bearer token) |
-| Auth (dashboard) | NextAuth credentials |
-| API style | REST + Zod validation |
-| Solana | @solana/web3.js + SPL tokens (devnet) |
-| Deploy | Vercel (web) + Railway (API) + Neon (DB) |
-
----
-
-## Monorepo Structure
-
-```
-command-rail/
-├── apps/
-│   ├── web/          # Next.js dashboard (admin + approvals)
-│   └── api/          # Fastify API server
-├── packages/
-│   ├── shared/       # Zod schemas, types, constants
-│   ├── policy-engine/ # Pure policy evaluation logic (no I/O)
-│   ├── solana/       # Treasury adapters, SPL transfers
-│   └── sdk/          # TypeScript SDK for agents
-├── prisma/
-│   └── schema.prisma
-├── docker-compose.yml
-└── turbo.json
+### One-time setup
+```bash
+pnpm install
+docker compose up -d                          # Postgres on :5433, optional local solana-test-validator on :8899
+pnpm --filter @aegis/api db:migrate           # Prisma migrations
+pnpm --filter @aegis/api db:seed              # Demo data + admin user
+cp apps/api/.env.example apps/api/.env        # Fill in DB URL, AEGIS_DELEGATE_SECRET, mint address
 ```
 
----
+### Daily development
+```bash
+pnpm dev                                      # Turbo: runs api (:3001) + web (:3000) + watch builds
+pnpm build                                    # Build all packages (also serves as type-check)
+pnpm lint                                     # Per-workspace lint (mostly `tsc --noEmit`)
+pnpm test                                     # All vitest suites
+pnpm format                                   # Prettier across ts/tsx/md/json
+```
 
-## Domain Model (8 entities)
+### Per-package
+```bash
+pnpm --filter @aegis/api dev                  # Fastify API only (tsx watch with --env-file=.env)
+pnpm --filter @aegis/web dev                  # Next.js dashboard only
+pnpm --filter @aegis/policy-engine test       # Policy unit tests (pure, deterministic, fast)
+pnpm --filter @aegis/policy-engine test -- evaluate.test.ts -t "kill switch"   # Single test
+pnpm --filter @aegis/api db:studio            # Prisma Studio
+pnpm --filter @aegis/api demo                 # Animated end-to-end demo (requires funded treasury)
+```
 
-1. **Company** — org/tenant (id, name, slug)
-2. **Treasury** — Solana wallet + config (id, companyId, name, network, baseCurrency, walletAddress, status)
-3. **Agent** — registered agent (id, companyId, name, externalAgentId, type, status, killSwitchActive, apiKeyHash, treasuryId)
-4. **Policy** — rules attached to agent (id, agentId, name, rulesJson: maxTransaction, dailyLimit, monthlyLimit, vendorAllowList, vendorDenyList, approvalThreshold, allowedActionTypes)
-5. **Budget** — spending limits (id, agentId, dailyLimit, monthlyLimit, perTransactionLimit, currency, active)
-6. **SpendRequest** — economic request (id, companyId, agentId, actionType, vendor, amount, currency, reason, reference, status, policyDecision, txSignature, metadataJson)
-7. **ApprovalRequest** — human approval (id, spendRequestId, approverEmail, status, decisionReason, decidedAt)
-8. **AuditLog** — immutable event log (id, companyId, agentId, spendRequestId, eventType, actorType, actorId, payloadJson)
+### Solana devnet bootstrap
+```bash
+# Generate the Permanent Delegate keypair (paste into apps/api/.env as AEGIS_DELEGATE_SECRET)
+node -e "const {Keypair}=require('@solana/web3.js');const kp=Keypair.generate();console.log(kp.publicKey.toBase58());console.log('AEGIS_DELEGATE_SECRET='+Buffer.from(kp.secretKey).toString('base64'))"
 
----
+# Fund treasury with Token-2022 demo tokens (after seed prints COMPANY_ID/TREASURY_ID)
+curl -X POST http://localhost:3001/companies/$COMPANY_ID/treasuries/$TREASURY_ID/fund-demo \
+  -H "Content-Type: application/json" -d '{"amount": 10000}'
+# Save returned mintAddress as DEVNET_DEMO_MINT_ADDRESS in apps/api/.env
+```
 
-## Policy Engine
-
-Lives in `packages/policy-engine`. Must be pure, deterministic, testable, zero I/O.
-
-### Supported rules:
-- maxTransactionAmount — reject if amount exceeds limit
-- dailyBudget — reject if cumulative daily spend exceeds limit
-- monthlyBudget — reject if cumulative monthly spend exceeds limit
-- vendorAllowList — reject if vendor not in list
-- vendorDenyList — reject if vendor in list
-- requireApprovalAbove — require human approval above threshold
-- allowedActionTypes — reject if action type not allowed
-- killSwitch — reject everything if active
-
-### Decision outputs:
-- `APPROVED`
-- `REQUIRES_APPROVAL`
-- `REJECTED`
-
-Each decision includes: matched rule, reason, policy snapshot.
+The `apps/api` server requires `dotenv/config` to load **before** any local import that references `process.env` (notably `@aegis/solana`, which reads `SOLANA_RPC_URL` at module load). Don't reorder imports in [apps/api/src/server.ts](apps/api/src/server.ts).
 
 ---
 
-## API Surface
+## Architecture
 
-### Agents
-- `POST /companies/:companyId/agents` — register agent, returns API key
-- `GET /companies/:companyId/agents` — list agents
-- `GET /agents/:agentId` — agent details
-- `PATCH /agents/:agentId` — update agent
-- `POST /agents/:agentId/kill-switch` — toggle kill switch
+### Monorepo (Turborepo + pnpm workspaces)
+```
+apps/
+  api/        Fastify REST API (composition root: src/server.ts)
+  web/        Next.js dashboard (App Router, NextAuth Credentials)
+packages/
+  shared/         Zod schemas, enums, domain types, SettlementAdapter interface
+  policy-engine/  Pure evaluate() — zero I/O, deterministic, vitest-tested
+  solana/         Token-2022 treasury, cNFT receipts, Solana Pay URI, devnet funding
+  stellar/        Second SettlementAdapter implementation (multi-chain proof)
+  sdk/            TypeScript client for AI agents (requestAndExecute, pay, waitForApproval)
+examples/         ai-agent, simple-agent — usage demos for the SDK
+prisma/
+  schema.prisma   10-entity domain model
+  migrations/
+docker-compose.yml  postgres + solana-test-validator
+```
 
-### Spend Requests
-- `POST /spend-requests` — agent submits request (evaluated automatically)
-- `GET /spend-requests/:requestId` — check status
-- `POST /spend-requests/:requestId/execute` — execute approved request
+Package names use `@aegis/*` (e.g. `@aegis/api`, `@aegis/policy-engine`). The root `package.json` is named `aegis-protocol`.
 
-### Approvals
-- `GET /approvals/pending` — pending approvals
-- `POST /approvals/:approvalId/approve` — approve
-- `POST /approvals/:approvalId/reject` — reject
+### Domain model — 10 entities
+1. **Company** — tenant; holds the Bubblegum Merkle tree address for cNFT receipts
+2. **Vendor** — payment recipient with a real Solana wallet (separate from string-based vendor names in policy rules)
+3. **Treasury** — Solana wallet + Token-2022 config (`encryptedSecret` is server-side only, **never serialized**)
+4. **Agent** — registered agent with `apiKeyHash` (SHA-256, indexed) and `killSwitchActive`
+5. **Policy** — governance rules as JSON (`rules` field), validated by Zod at the API boundary
+6. **Budget** — daily/monthly/per-tx limits, `Decimal(18, 6)` to avoid USDC float errors; **one budget per agent** (`@unique` on `agentId`)
+7. **SpendRequest** — central entity; lifecycle `PENDING → APPROVED|REJECTED|REQUIRES_APPROVAL → EXECUTED|FAILED`
+8. **ApprovalRequest** — 1:1 with SpendRequest, only created when the engine returns `REQUIRES_APPROVAL`
+9. **User** — dashboard human (bcrypt password hash, role: OWNER/ADMIN/VIEWER)
+10. **AuditLog** — immutable, indexed on `(companyId, createdAt)` and `(agentId, createdAt)`; `payload` is freeform JSON keyed by `eventType`
 
-### Audit
-- `GET /companies/:companyId/audit-logs` — query audit trail
+### Policy engine ([packages/policy-engine](packages/policy-engine))
+Lives behind one function: `evaluate(EvaluationContext) → PolicyEvaluationResult`. Rules run **top-to-bottom**, first match wins:
 
-### Setup
-- `POST /companies` — create company
-- `POST /companies/:companyId/treasuries` — create treasury
-- `POST /companies/:companyId/budgets` — create budget
-- `POST /agents/:agentId/policies` — assign policy
+1. `kill_switch` — agent emergency stop (also triggers on-chain Permanent Delegate sweep at the API layer)
+2. `agent_disabled`
+3. `action_type_not_allowed`
+4. `vendor_denied`
+5. `vendor_not_allowed`
+6. `per_transaction_limit_exceeded`
+7. `max_transaction_amount_exceeded`
+8. `daily_budget_exceeded`
+9. `monthly_budget_exceeded`
+10. `require_approval_above` (escalates instead of rejects)
+11. fall-through → `APPROVED`
 
----
+**Hard rules:** the engine must remain pure (no DB, HTTP, time, or randomness inside). The API layer is responsible for fetching daily/monthly spend totals and budget rows, then passing them in. Adding a rule means adding a unit test in [packages/policy-engine/src/__tests__/evaluate.test.ts](packages/policy-engine/src/__tests__/evaluate.test.ts).
 
-## Solana Integration
+### API ([apps/api](apps/api))
+Fastify + Zod, with route modules registered in [apps/api/src/server.ts](apps/api/src/server.ts). Routes are split: `companies`, `agents`, `spend-requests` (the core flow), `approvals`, `audit`, `vendors`, `users`. Auth: agents use `Authorization: Bearer cr_...` (validated against `Agent.apiKeyHash`); the dashboard hits `/auth/login` for NextAuth.
 
-Solana is structural, not cosmetic.
+Conventions:
+- routes are thin; business logic in `src/services/*`
+- `Treasury.encryptedSecret` is stripped at the route layer before any JSON serialization
+- Solana logic is **never** imported directly in routes — go through `@aegis/solana` adapters
 
-### What to implement (devnet):
-- Treasury wallets as real Solana keypairs
-- USDC devnet token accounts per treasury
-- Approved spend → real SPL token transfer on devnet
-- Transaction signatures stored in audit log, linkable to Solana Explorer
-- Kill switch → revoke delegate authority (freeze treasury)
+### Solana integration ([packages/solana](packages/solana))
+Solana is structural. Implement these patterns; do **not** add custom Anchor programs or mainnet logic.
 
-### What NOT to implement:
-- Custom on-chain programs (Anchor) — use standard SPL
-- Mainnet anything — devnet is sufficient
-- Complex multi-sig — server holds delegate authority
+- **Token-2022 + Permanent Delegate** — kill switch isn't just a DB flag. `freezeTreasury()` performs an on-chain `transferChecked` from the Permanent Delegate authority (`AEGIS_DELEGATE_SECRET`) sweeping balances to a quarantine wallet. Visible on Solana Explorer.
+- **cNFT audit receipts (Metaplex Bubblegum + UMI)** — every policy decision mints a compressed NFT. One Merkle tree per Company (`maxDepth=14`, ~16k receipts), created lazily on first spend request.
+- **Solana Pay URIs** — `GET /vendors/:id/solana-pay-uri` builds spec-compliant `solana:` URIs with a fresh reference keypair per invoice. The SDK's `aegis.pay(uri)` parses → governed SpendRequest → same flow.
+- **SettlementAdapter** — interface in `@aegis/shared` with `createWallet()`, `transfer()`, `freeze()`, `getBalance()`. `TreasuryService` (Solana) implements it; `@aegis/stellar` proves multi-chain extensibility. Governance logic must depend only on the interface.
 
-All Solana logic must live in `packages/solana` behind adapter interfaces.
+### Web dashboard ([apps/web](apps/web)) — IMPORTANT
+**This Next.js version has breaking changes vs. training data.** Per [apps/web/AGENTS.md](apps/web/AGENTS.md): consult `node_modules/next/dist/docs/` (and heed deprecation notices) before writing routing, server-component, or build-config code in `apps/web`. The repo runs Next.js 16 + React 19 + Tailwind v4 + NextAuth 5 (beta) + Turbopack. Do not assume App Router APIs you remember are still current.
 
----
-
-## Primary Demo Scenario
-
-**API procurement agent** — marketing bot purchasing API access.
-
-Scenarios to demo:
-1. Small spend (< 10 USDC) → auto-approved → Solana transfer
-2. Medium spend (10-50 USDC) → requires human approval → admin approves → transfer
-3. Blocked vendor → rejected
-4. Kill switch activated → all requests rejected, treasury frozen
-
----
-
-## Non-Goals
-
-Do not build:
-- a full agent runtime
-- generic chat UX
-- LLM orchestration tooling
-- a procurement ERP
-- multi-chain support
-- custom on-chain programs
-- unnecessary abstractions
-
----
-
-## Product Framing
-
-Always frame as:
-- governance layer for AI agents
-- economic control plane
-- controlled autonomy
-- programmable treasury on Solana
-
-Never frame as:
-- AI wallet app
-- crypto dashboard
-- chatbot with payments
+NextAuth is configured in [apps/web/auth.ts](apps/web/auth.ts) and validates via the API's `/auth/login`. The session JWT carries `role` and `companyId`.
 
 ---
 
 ## Engineering Standards
 
-- strict TypeScript, no implicit any
-- thin routes, business logic in services
-- policy logic separate from persistence
-- Solana logic isolated behind adapters
-- prefer explicit domain models
-- keep modules small and testable
+- Strict TypeScript everywhere (`strict`, `noImplicitAny`, `noUnusedLocals`, `exactOptionalPropertyTypes` are on in [tsconfig.base.json](tsconfig.base.json))
+- Thin routes, business logic in services
+- Policy logic separate from persistence
+- Solana logic isolated behind `SettlementAdapter` / `@aegis/solana` exports
+- Prefer explicit domain models; small, testable modules
+- Use `Decimal(18, 6)` for any USDC amount in Prisma; never `Float`/`Number` for money
+- The `Policy.rules` JSON shape is enforced by Zod in `@aegis/shared` — update the schema when adding rule types
 
----
+## Non-goals (do not build)
 
-## Hackathon Context
-
-- **Event:** Solana Frontier Hackathon (Colosseum)
-- **Deadline:** May 11, 2026
-- **Submission:** GitHub repo + pitch video (3min) + technical demo (2-3min) + form
-- **Judging:** Market fit, traction, technical implementation, Solana integration, MVP quality
+- a full agent runtime
+- generic chat UX or LLM orchestration tooling
+- a procurement ERP
+- mainnet-anything (devnet is sufficient for the hackathon)
+- custom on-chain programs (use SPL / Token-2022 / Bubblegum primitives)
+- complex multi-sig (server holds delegate authority by design)
+- speculative abstractions ahead of the second concrete use case

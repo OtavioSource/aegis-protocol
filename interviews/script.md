@@ -71,11 +71,51 @@
 
 ---
 
-## Fechamento (1 min)
+## Fechamento (2 min) — pedir compromissos reais, não só "feedback"
 
-> "Muito obrigado, [nome]. Foi muito útil. Estou construindo o Aegis Protocol — uma camada de governança para gastos de IA, com aprovação por agente, kill switch e auditoria. Posso te mandar uma demo daqui umas semanas para você dar feedback? Sem compromisso, sem venda."
+> **Princípio (Wlad Mendes / Mom Test):** *"Elogio é ruído. Compromisso é sinal."* "Adorei sua ideia, manda quando tiver" não vale nada. O que vale é o entrevistado **gastar algo (tempo, reputação, dinheiro)** depois da call.
 
-**Se ele topar:** anotar como **lead quente** (potencial design partner).
+**Abertura do fechamento:**
+> "Obrigado, [nome]. Foi muito útil. Estou construindo o Aegis Protocol — uma camada de governança para gastos de IA, com aprovação por agente, kill switch e auditoria. Antes de fechar, queria pedir 3 coisas específicas — pode dizer não a qualquer uma."
+
+### Compromisso #1 — Indicação concreta (custa reputação dele)
+
+> "Você mencionou [Pessoa X / contexto] durante a call. Topa fazer uma apresentação rápida via LinkedIn ou WhatsApp essa semana? Se preferir, te mando um texto de 3 linhas pronto pra você só encaminhar."
+
+**Por que esse formato:**
+- "Essa semana" = data, não vago
+- "Texto pronto pra encaminhar" = remove fricção de escrita
+- Indicação custa reputação dele = compromisso real (Mom Test)
+
+### Compromisso #2 — Re-call com protótipo em data marcada (custa tempo dele)
+
+> "Em ~2 semanas vou ter um protótipo navegável + 1 página de proposta. Topa olhar 30min e me dizer se faz sentido? Pode marcar agora ou te chamo na semana que vem pra agendar."
+
+**Por que esse formato:**
+- "30min" = compromisso definido, não "demo daqui umas semanas"
+- "Marcar agora" = teste de comprometimento real
+- Quem topar marcar agora = 🟢 verde forte
+
+### Compromisso #3 — Design partner com troca de valor (avançado, só se 1 e 2 toparam)
+
+> "Quando o MVP estiver de pé, estou buscando 3 design partners que topem usar gratuitamente por 3 meses em troca de feedback semanal de 30min. Você teria interesse em ser um?"
+
+**Por que esse formato:**
+- Pede TEMPO (mais escasso que dinheiro em founder)
+- "3 meses + 30min/semana" = compromisso quantificado
+- Quem topar = lead quente confirmado, design partner identificado
+
+### Como interpretar as respostas
+
+| Resposta a #1 + #2 + #3 | Sinal | Próximo passo |
+|---|---|---|
+| Topou os 3 (e marcou data) | 🟢🟢 Verde forte | Design partner — anotar no log + cronograma de contato |
+| Topou #1 e #2, hesitou no #3 | 🟢 Verde | Lead quente — agendar re-call e revisitar #3 depois |
+| Topou só #1 (indicação) | 🟡 Amarelo | Útil pra rede, mas não é o ICP — não insistir |
+| Topou só #2 (curiosidade demo) | 🟡 Amarelo | Curioso, mas sem dor real — agendar mas baixa prioridade |
+| Não topou nenhum | 🔴 Vermelho | Conversa boa para aprender, mas a dor não é forte o suficiente |
+
+**Regra de ouro:** se ele "amou a ideia" mas não topou nenhum dos 3 compromissos, **não amou. Foi educado.** Anote como vermelho.
 
 ---
 

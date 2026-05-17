@@ -20,7 +20,7 @@ import { Resend } from 'resend';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-const FROM = process.env.NOTIFICATION_FROM_EMAIL ?? 'Aegis Protocol <noreply@commandrail.io>';
+const FROM = process.env.NOTIFICATION_FROM_EMAIL ?? 'Aegis Protocol <noreply@aegis.io>';
 const DASHBOARD_URL = process.env.DASHBOARD_URL ?? 'http://localhost:3000';
 
 /**

@@ -3,7 +3,7 @@
  * @package @aegis/policy-engine
  *
  * ═══════════════════════════════════════════════════════════════
- *  THE CORE OF COMMANDRAIL — POLICY EVALUATION ENGINE
+ *  THE CORE OF AEGIS PROTOCOL — POLICY EVALUATION ENGINE
  * ═══════════════════════════════════════════════════════════════
  *
  * This is the most important file in the system. It is the single

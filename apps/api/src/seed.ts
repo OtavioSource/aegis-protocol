@@ -7,7 +7,7 @@
  *   - 1 treasury (Solana devnet wallet)
  *   - 3 vendors with REAL Solana keypairs (funds will go to different wallets)
  *   - 2 agents (Marketing Bot, DevOps Agent) with policies and budgets
- *   - 1 admin user (admin@acme.com / commandrail)
+ *   - 1 admin user (admin@acme.com / aegis)
  *
  * Run: pnpm --filter api db:seed
  *

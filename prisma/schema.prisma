@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-//  COMMANDRAIL — PRISMA SCHEMA
+//  AEGIS PROTOCOL — PRISMA SCHEMA
 //  Economic Governance Layer for AI Agents on Solana
 // ═══════════════════════════════════════════════════════════════
 //
@@ -182,7 +182,7 @@ enum AgentStatus {
 // At most ONE policy is active per agent at a time.
 // Previous policies are preserved (active: false) for audit history.
 //
-// rules JSON shape (see PolicyRules type in @command-rail/shared):
+// rules JSON shape (see PolicyRules type in @aegis/shared):
 //   {
 //     "maxTransactionAmount": 50,        // Hard ceiling per transaction
 //     "requireApprovalAbove": 10,        // Escalate to human above this
@@ -329,7 +329,7 @@ enum ApprovalStatus {
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
-// Admin users who manage the CommandRail dashboard.
+// Admin users who manage the Aegis Protocol dashboard.
 // Separate from Agents — agents are AI processes, users are humans.
 //
 // passwordHash: bcrypt hash of the password (never stored in plaintext)

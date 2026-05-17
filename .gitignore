@@ -12,3 +12,4 @@ coverage/
 test-ledger/
 test-db.mjs
 .claude/
+aulas/

@@ -38,7 +38,7 @@ import { CreateUserSchema, UpdateUserSchema, LoginSchema } from '@aegis/shared';
 export async function usersRoutes(app: FastifyInstance) {
   // ─── POST /companies/:companyId/users ─────────────────────────────────────
   // Create a new admin user for a company.
-  // The first user should be created via seed (admin@acme.com / commandrail).
+  // The first user should be created via seed (admin@acme.com / aegis).
   // Subsequent users are created by existing admins.
   app.post<{ Params: { companyId: string } }>(
     '/companies/:companyId/users',

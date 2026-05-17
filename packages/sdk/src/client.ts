@@ -31,7 +31,7 @@ export type SpendRequestResponse = {
  * @example
  * const rail = new Aegis({
  *   apiKey: 'agent_key_xxx',
- *   baseUrl: 'https://api.commandrail.io',
+ *   baseUrl: 'https://api.aegis.io',
  *   agentId: 'agt_123',
  * });
  *
