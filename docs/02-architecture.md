@@ -17,7 +17,7 @@ Agente **nunca** detém chave Stellar — Aegis sim. Toda decisão **sempre** vi
 - **Trade-off:** Aegis vira ponto único de falha de custódia. Mitigado por roadmap de KMS/multisig no Marco 2.
 
 ### P3 — Zero fricção blockchain para o cliente
-Company e Vendor nunca precisam ter XLM, abrir trustline manualmente ou entender Stellar. Aegis sponsoreia, paga fees e abstrai via API.
+Company e Vendor nunca precisam ter XLM, abrir trustline manualmente ou entender Stellar. Aegis faz o papel de sponsor, paga fees e abstrai via API.
 - **Trade-off:** Aegis carrega custo operacional (reserves locked, XLM operacional). Documentado em `docs/05-zero-friction-onboarding.md`.
 
 ### P4 — Adapter para opcionalidade futura
@@ -32,31 +32,31 @@ Mostra Aegis Protocol e quem interage com ele.
 
 ```mermaid
 graph TB
-    subgraph "Lado do Cliente (Company)"
-        Agent[Agente IA<br/>Claude/GPT/custom]
-        Admin[Admin humano<br/>Camila CTO]
+    subgraph cliente["Lado do Cliente (Company)"]
+        Agent["Agente IA<br/>Claude/GPT/custom"]
+        Admin["Admin humano<br/>Camila CTO"]
     end
 
-    subgraph "Aegis Protocol"
-        Aegis[Aegis Protocol<br/>API + Dashboard]
+    subgraph aegisbox["Aegis Protocol"]
+        Aegis["Aegis Protocol<br/>API + Dashboard"]
     end
 
-    subgraph "Stellar Network"
-        Horizon[Stellar Horizon<br/>Testnet]
-        Soroban[Soroban RPC<br/>Testnet]
-        Anchor[SEP-24 Anchor<br/>testanchor.stellar.org]
+    subgraph stellarnet["Stellar Network"]
+        Horizon["Stellar Horizon<br/>Testnet"]
+        Soroban["Soroban RPC<br/>Testnet"]
+        Anchor["SEP-24 Anchor<br/>testanchor.stellar.org"]
     end
 
-    Vendor[Vendor<br/>API/serviço cobrando via HTTP 402]
+    Vendor["Vendor<br/>API/serviço cobrando via HTTP 402"]
 
-    Agent -->|POST /spend-requests<br/>Bearer cr_...| Aegis
-    Admin -->|HTTPS dashboard| Aegis
-    Aegis -->|submit tx<br/>Payment USDC| Horizon
-    Aegis -->|invoke record_decision| Soroban
-    Aegis -->|SEP-10 auth + SEP-24<br/>deposit/withdraw| Anchor
-    Horizon -.->|USDC creditado| Vendor
-    Anchor -->|callback async<br/>USDC credit/debit| Aegis
-    Agent -.->|reapresenta prova<br/>de pagamento| Vendor
+    Agent -->|"POST /spend-requests<br/>Bearer cr_..."| Aegis
+    Admin -->|"HTTPS dashboard"| Aegis
+    Aegis -->|"submit tx<br/>Payment USDC"| Horizon
+    Aegis -->|"invoke record_decision"| Soroban
+    Aegis -->|"SEP-10 auth + SEP-24<br/>deposit/withdraw"| Anchor
+    Horizon -.->|"USDC creditado"| Vendor
+    Anchor -->|"callback async<br/>USDC credit/debit"| Aegis
+    Agent -.->|"reapresenta prova<br/>de pagamento"| Vendor
 ```
 
 **Atores externos:**
@@ -77,37 +77,37 @@ Decomposição interna do "Aegis Protocol" do diagrama anterior.
 
 ```mermaid
 graph TB
-    Agent[Agente IA]
-    Admin[Admin]
+    Agent["Agente IA"]
+    Admin["Admin"]
 
-    subgraph "Aegis Protocol Monorepo"
-        Web[apps/web<br/>Next.js 14 App Router<br/>Dashboard]
-        API[apps/api<br/>Fastify + TS + Zod<br/>REST gateway]
-        Engine[packages/policy-engine<br/>função pura zero I/O]
-        Shared[packages/shared<br/>types + SettlementAdapter]
-        StellarPkg[packages/stellar<br/>implementação Stellar do Adapter<br/>+ SEP-24 client]
-        SDK[packages/sdk<br/>@aegis/sdk para agentes]
-        SorobanContract[contracts/aegis-audit<br/>Rust + soroban-sdk]
-        DB[(PostgreSQL<br/>Neon serverless)]
+    subgraph monorepo["Aegis Protocol Monorepo"]
+        Web["apps/web<br/>Next.js 14 App Router<br/>Dashboard"]
+        API["apps/api<br/>Fastify + TS + Zod<br/>REST gateway"]
+        Engine["packages/policy-engine<br/>função pura zero I/O"]
+        Shared["packages/shared<br/>types + SettlementAdapter"]
+        StellarPkg["packages/stellar<br/>implementação Stellar do Adapter<br/>+ SEP-24 client"]
+        SDK["packages/sdk<br/>@aegis/sdk para agentes"]
+        SorobanContract["contracts/aegis-audit<br/>Rust + soroban-sdk"]
+        DB[("PostgreSQL<br/>Neon serverless")]
     end
 
-    Horizon[Stellar Horizon]
-    Soroban[Soroban RPC]
-    Anchor[SEP-24 Anchor]
+    Horizon["Stellar Horizon"]
+    Soroban["Soroban RPC"]
+    Anchor["SEP-24 Anchor"]
 
-    Agent -->|via @aegis/sdk| API
-    Admin -->|HTTPS| Web
-    Web -->|REST interno| API
-    API -->|invoca| Engine
-    API -->|Prisma| DB
-    Engine -.->|consome tipos| Shared
-    API -.->|consome tipos| Shared
-    API -->|usa adapter| StellarPkg
-    StellarPkg -->|HTTP| Horizon
-    StellarPkg -->|JSON-RPC| Soroban
-    StellarPkg -->|SEP-10/24| Anchor
-    SorobanContract -.->|deployed em| Soroban
-    SDK -.->|cliente HTTP| API
+    Agent -->|"via @aegis/sdk"| API
+    Admin -->|"HTTPS"| Web
+    Web -->|"REST interno"| API
+    API -->|"invoca"| Engine
+    API -->|"Prisma"| DB
+    Engine -.->|"consome tipos"| Shared
+    API -.->|"consome tipos"| Shared
+    API -->|"usa adapter"| StellarPkg
+    StellarPkg -->|"HTTP"| Horizon
+    StellarPkg -->|"JSON-RPC"| Soroban
+    StellarPkg -->|"SEP-10/24"| Anchor
+    SorobanContract -.->|"deployed em"| Soroban
+    SDK -.->|"cliente HTTP"| API
 ```
 
 ### Container responsabilities
@@ -131,25 +131,25 @@ Foco no container mais complexo. Componentes internos do `apps/api`:
 
 ```mermaid
 graph LR
-    subgraph "apps/api"
-        Routes[Routes<br/>spend-requests<br/>approvals<br/>vendors<br/>fiat]
-        AuthMW[Auth Middleware<br/>Bearer cr_ + Session]
-        IdemMW[Idempotency Middleware]
-        RateLimitMW[Rate Limit Middleware]
+    subgraph apibox["apps/api"]
+        Routes["Routes<br/>spend-requests<br/>approvals<br/>vendors<br/>fiat"]
+        AuthMW["Auth Middleware<br/>Bearer cr_ + Session"]
+        IdemMW["Idempotency Middleware"]
+        RateLimitMW["Rate Limit Middleware"]
 
-        SpendOrchestrator[Spend Request<br/>Orchestrator]
-        ApprovalService[Approval Service]
-        VendorService[Vendor Service<br/>onboarding sponsored]
-        FiatService[Fiat Service<br/>SEP-24 deposit/withdraw]
-        AuditService[Audit Service<br/>persist + emit Soroban event]
+        SpendOrchestrator["Spend Request<br/>Orchestrator"]
+        ApprovalService["Approval Service"]
+        VendorService["Vendor Service<br/>onboarding sponsored"]
+        FiatService["Fiat Service<br/>SEP-24 deposit/withdraw"]
+        AuditService["Audit Service<br/>persist + emit Soroban event"]
 
-        PolicyLoader[Policy Loader]
-        ContextLoader[Runtime Context Loader<br/>monthly usage etc]
+        PolicyLoader["Policy Loader"]
+        ContextLoader["Runtime Context Loader<br/>monthly usage etc"]
 
-        StellarClient[Stellar Adapter Client<br/>de @aegis/stellar]
-        SorobanClient[Soroban Client<br/>de @aegis/stellar]
+        StellarClient["Stellar Adapter Client<br/>de @aegis/stellar"]
+        SorobanClient["Soroban Client<br/>de @aegis/stellar"]
 
-        Prisma[(Prisma Client)]
+        Prisma[("Prisma Client")]
     end
 
     Routes --> AuthMW
@@ -159,7 +159,7 @@ graph LR
 
     SpendOrchestrator --> PolicyLoader
     SpendOrchestrator --> ContextLoader
-    SpendOrchestrator -->|invoca| Engine[Policy Engine<br/>função pura]
+    SpendOrchestrator -->|"invoca"| Engine["Policy Engine<br/>função pura"]
     SpendOrchestrator --> AuditService
     SpendOrchestrator --> StellarClient
 
@@ -332,31 +332,31 @@ sequenceDiagram
 
 ```mermaid
 graph TB
-    subgraph "Vercel"
-        WebDeploy[apps/web<br/>SSR + Edge]
+    subgraph vercel["Vercel"]
+        WebDeploy["apps/web<br/>SSR + Edge"]
     end
 
-    subgraph "Railway"
-        APIDeploy[apps/api<br/>Node 22 container]
+    subgraph railway["Railway"]
+        APIDeploy["apps/api<br/>Node 22 container"]
     end
 
-    subgraph "Neon"
-        DB[(PostgreSQL<br/>serverless)]
+    subgraph neon["Neon"]
+        DB[("PostgreSQL<br/>serverless")]
     end
 
-    subgraph "Stellar Foundation Testnet"
-        HorizonInf[Horizon]
-        SorobanInf[Soroban RPC]
-        AnchorInf[testanchor.stellar.org]
+    subgraph stellarfoundation["Stellar Foundation Testnet"]
+        HorizonInf["Horizon"]
+        SorobanInf["Soroban RPC"]
+        AnchorInf["testanchor.stellar.org"]
     end
 
-    User[Admin browser] -->|HTTPS| WebDeploy
-    Agent[Agent IA<br/>cliente do usuário] -->|HTTPS| APIDeploy
-    WebDeploy -->|HTTPS interno| APIDeploy
-    APIDeploy -->|TCP TLS| DB
-    APIDeploy -->|HTTPS| HorizonInf
-    APIDeploy -->|HTTPS| SorobanInf
-    APIDeploy -->|HTTPS| AnchorInf
+    User["Admin browser"] -->|"HTTPS"| WebDeploy
+    Agent["Agent IA<br/>cliente do usuário"] -->|"HTTPS"| APIDeploy
+    WebDeploy -->|"HTTPS interno"| APIDeploy
+    APIDeploy -->|"TCP TLS"| DB
+    APIDeploy -->|"HTTPS"| HorizonInf
+    APIDeploy -->|"HTTPS"| SorobanInf
+    APIDeploy -->|"HTTPS"| AnchorInf
 ```
 
 **Decisões de deployment:**
