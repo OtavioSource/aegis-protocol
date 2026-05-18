@@ -1,0 +1,395 @@
+// Aegis Protocol — Prisma schema
+//
+// Modela as 12 entidades do domínio (ver docs/03-domain-model.md).
+// Multi-tenancy: toda entidade tenant-bound carrega `companyId` (RNF6).
+// Convenções:
+//   - IDs UUID via @db.Uuid + @default(uuid())
+//   - Tabelas snake_case via @@map
+//   - Enums alinhados com @aegis/shared/enums.ts
+//   - Valores monetários em BigInt (centavos USD)
+//   - Indexes em FKs + campos de query frequente
+//   - onDelete: Cascade em FKs para Company (testes / cleanup)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================================
+// Enums (espelham @aegis/shared/enums.ts)
+// ============================================================================
+
+enum ChainType {
+  STELLAR
+}
+
+enum Network {
+  TESTNET
+  MAINNET
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  VIEWER
+}
+
+enum AgentStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum VendorStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum VendorWalletStatus {
+  PROVISIONING
+  ACTIVE
+  SPONSORED_BY_AEGIS
+  INACTIVE
+}
+
+enum VendorSignMode {
+  AEGIS
+  SELF
+}
+
+enum SpendRequestStatus {
+  CREATED
+  APPROVED
+  REQUIRES_APPROVAL
+  REJECTED
+  APPROVED_BY_HUMAN
+  REJECTED_BY_HUMAN
+  EXPIRED
+  EXECUTING
+  EXECUTED
+  EXECUTION_FAILED
+}
+
+enum DecisionType {
+  APPROVED
+  REQUIRES_APPROVAL
+  REJECTED
+}
+
+enum ApprovalAction {
+  APPROVED
+  REJECTED
+}
+
+enum EventType {
+  DECISION_MADE
+  PAYMENT_EXECUTED
+  APPROVAL_REQUESTED
+  APPROVAL_GRANTED
+  APPROVAL_DENIED
+  KILL_SWITCH_ACTIVATED
+  FIAT_DEPOSITED
+  FIAT_WITHDRAWN
+}
+
+enum FiatTransactionStatus {
+  INITIATED
+  PENDING_USER_INFO
+  PENDING_USER_TRANSFER
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// ============================================================================
+// Models
+// ============================================================================
+
+model Company {
+  id                 String   @id @default(uuid()) @db.Uuid
+  name               String   @db.VarChar(200)
+  slug               String   @unique @db.VarChar(100)
+  monthlyBudgetCents BigInt?
+  defaultPolicyId    String?  @db.Uuid
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  users           User[]
+  agents          Agent[]
+  policies        Policy[]
+  vendors         Vendor[]
+  spendRequests   SpendRequest[]
+  auditEvents     AuditEvent[]
+  fiatDeposits    FiatDeposit[]
+  fiatWithdrawals FiatWithdrawal[]
+
+  @@map("company")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique @db.VarChar(255)
+  name         String    @db.VarChar(200)
+  /// bcrypt/argon2 hash. NULL para usuários OAuth-only.
+  passwordHash String?   @db.VarChar(255)
+  role         UserRole  @default(VIEWER)
+  companyId    String    @db.Uuid
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  approvals Approval[]
+
+  @@index([companyId])
+  @@map("user")
+}
+
+model Agent {
+  id             String      @id @default(uuid()) @db.Uuid
+  companyId      String      @db.Uuid
+  name           String      @db.VarChar(200)
+  description    String?     @db.Text
+  /// hash bcrypt/argon2 da API key completa
+  apiKeyHash     String      @unique
+  /// primeiros chars (ex: "cr_a8x9k2j") para listagem segura no dashboard
+  apiKeyPrefix   String      @db.VarChar(20)
+  activePolicyId String      @db.Uuid
+  status         AgentStatus @default(ACTIVE)
+  metadata       Json        @default("{}")
+  revokedAt      DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  activePolicy  Policy         @relation(fields: [activePolicyId], references: [id])
+  spendRequests SpendRequest[]
+
+  @@index([companyId])
+  @@index([apiKeyPrefix])
+  @@map("agent")
+}
+
+model Policy {
+  id                 String   @id @default(uuid()) @db.Uuid
+  companyId          String   @db.Uuid
+  name               String   @db.VarChar(200)
+  version            Int      @default(1)
+  /// PolicyRules JSON conforme PolicyRulesSchema de @aegis/shared
+  rules              Json
+  isActive           Boolean  @default(true)
+  supersedesPolicyId String?  @db.Uuid
+  createdAt          DateTime @default(now())
+
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supersedesPolicy Policy?        @relation("PolicyVersions", fields: [supersedesPolicyId], references: [id])
+  nextVersions     Policy[]       @relation("PolicyVersions")
+  agents           Agent[]
+  spendRequests    SpendRequest[]
+
+  @@index([companyId, isActive])
+  @@map("policy")
+}
+
+model Vendor {
+  id             String       @id @default(uuid()) @db.Uuid
+  companyId      String       @db.Uuid
+  name           String       @db.VarChar(200)
+  description    String?      @db.Text
+  /// Asset preferido do vendor: USDC default; aceita EURC, BRL, ARS, etc. (RF11)
+  preferredAsset String       @default("USDC") @db.VarChar(12)
+  metadata       Json         @default("{}")
+  status         VendorStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  wallets       VendorWallet[]
+  spendRequests SpendRequest[]
+
+  @@index([companyId])
+  @@map("vendor")
+}
+
+model VendorWallet {
+  id                 String             @id @default(uuid()) @db.Uuid
+  vendorId           String             @db.Uuid
+  chain              ChainType          @default(STELLAR)
+  publicKey          String             @db.VarChar(64)
+  /// Secret key cifrada com VENDOR_KEY_ENCRYPTION_KEY (Modo AEGIS only). Null em Modo SELF.
+  secretKeyEncrypted String?            @db.Text
+  signMode           VendorSignMode     @default(AEGIS)
+  status             VendorWalletStatus @default(PROVISIONING)
+  /// Trustlines abertas, ex: [{"asset":"USDC","issuer":"GD...","sponsored":true}]
+  trustlines         Json               @default("[]")
+  sponsorshipTxHash  String?            @db.VarChar(128)
+  isPrimary          Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  vendor        Vendor         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  spendRequests SpendRequest[]
+
+  @@unique([vendorId, publicKey])
+  @@index([vendorId, isPrimary])
+  @@map("vendor_wallet")
+}
+
+model SpendRequest {
+  id             String  @id @default(uuid()) @db.Uuid
+  companyId      String  @db.Uuid
+  agentId        String  @db.Uuid
+  vendorId       String  @db.Uuid
+  /// Resolvido na execução (PROVISIONING wallets ainda não elegíveis)
+  vendorWalletId String? @db.Uuid
+  policyId       String  @db.Uuid
+  /// Snapshot do Policy.rules no momento da decisão — auditoria histórica
+  policySnapshot Json
+
+  amountCents BigInt
+  asset       String  @db.VarChar(12)
+  actionType  String  @db.VarChar(64)
+  reason      String? @db.Text
+  metadata    Json    @default("{}")
+
+  /// (companyId, idempotencyKey) unique — RNF2
+  idempotencyKey String @db.VarChar(128)
+
+  status         SpendRequestStatus @default(CREATED)
+  decision       DecisionType?
+  decisionReason String?            @db.Text
+  evaluatedAt    DateTime?
+
+  txHash             String? @db.VarChar(128)
+  ledger             Int?
+  sorobanEventTxHash String? @db.VarChar(128)
+  executedAt         DateTime?
+  failureReason      String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agent        Agent         @relation(fields: [agentId], references: [id])
+  vendor       Vendor        @relation(fields: [vendorId], references: [id])
+  vendorWallet VendorWallet? @relation(fields: [vendorWalletId], references: [id])
+  policy       Policy        @relation(fields: [policyId], references: [id])
+  approval     Approval?
+  auditEvents  AuditEvent[]
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, status, createdAt])
+  @@index([agentId, status])
+  @@index([txHash])
+  @@map("spend_request")
+}
+
+model Approval {
+  id             String         @id @default(uuid()) @db.Uuid
+  spendRequestId String         @unique @db.Uuid
+  userId         String         @db.Uuid
+  action         ApprovalAction
+  reason         String?        @db.Text
+  createdAt      DateTime       @default(now())
+
+  spendRequest SpendRequest @relation(fields: [spendRequestId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("approval")
+}
+
+model AuditEvent {
+  id             String    @id @default(uuid()) @db.Uuid
+  companyId      String    @db.Uuid
+  spendRequestId String?   @db.Uuid
+  eventType      EventType
+  /// "agent:<id>" | "user:<id>" | "system" | "anchor:<provider>"
+  actor          String    @db.VarChar(128)
+  payload        Json
+  /// NULL = ainda não emitido na chain (worker está processando com retry)
+  sorobanTxHash    String?   @db.VarChar(128)
+  sorobanEmittedAt DateTime?
+  createdAt        DateTime  @default(now())
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  spendRequest SpendRequest? @relation(fields: [spendRequestId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([spendRequestId])
+  @@index([sorobanTxHash])
+  @@map("audit_event")
+}
+
+model TreasuryAccount {
+  id              String   @id @default(uuid()) @db.Uuid
+  publicKey       String   @unique @db.VarChar(64)
+  network         Network
+  /// Nome da env var que guarda a secret. Secret NUNCA é persistida em DB.
+  secretKeyEnvVar String   @db.VarChar(64)
+  /// Soroban contract ID do aegis_audit (após deploy)
+  auditContractId String?  @db.VarChar(64)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("treasury_account")
+}
+
+model FiatDeposit {
+  id                  String                @id @default(uuid()) @db.Uuid
+  companyId           String                @db.Uuid
+  userId              String                @db.Uuid
+  anchorId            String                @db.VarChar(64)
+  anchorTransactionId String                @db.VarChar(128)
+  interactiveUrl      String                @db.Text
+  amountCents         BigInt?
+  actualAmountCents   BigInt?
+  asset               String                @db.VarChar(12)
+  status              FiatTransactionStatus @default(INITIATED)
+  /// Hash da tx Stellar que creditou USDC na treasury
+  txHash              String?               @db.VarChar(128)
+  failureReason       String?               @db.Text
+  createdAt           DateTime              @default(now())
+  completedAt         DateTime?
+  updatedAt           DateTime              @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
+  @@index([anchorTransactionId])
+  @@map("fiat_deposit")
+}
+
+model FiatWithdrawal {
+  id                    String                @id @default(uuid()) @db.Uuid
+  companyId             String                @db.Uuid
+  userId                String                @db.Uuid
+  anchorId              String                @db.VarChar(64)
+  anchorTransactionId   String                @db.VarChar(128)
+  interactiveUrl        String                @db.Text
+  amountCents           BigInt?
+  actualAmountCents     BigInt?
+  asset                 String                @db.VarChar(12)
+  status                FiatTransactionStatus @default(INITIATED)
+  /// Hash da tx Stellar que enviou USDC da treasury para o anchor
+  txHash                String?               @db.VarChar(128)
+  bankReference         String?               @db.VarChar(128)
+  /// Dados bancários (mascarados no display); estrutura definida pelo anchor
+  withdrawalDestination Json?
+  failureReason         String?               @db.Text
+  createdAt             DateTime              @default(now())
+  completedAt           DateTime?
+  updatedAt             DateTime              @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
+  @@index([anchorTransactionId])
+  @@map("fiat_withdrawal")
+}
