@@ -19,7 +19,8 @@
     "db:push": "dotenv -e .env.local -- prisma db push",
     "db:seed": "dotenv -e .env.local -- prisma db seed",
     "db:studio": "dotenv -e .env.local -- prisma studio",
-    "db:validate": "dotenv -e .env.local -- prisma validate"
+    "db:validate": "dotenv -e .env.local -- prisma validate",
+    "setup:treasury": "dotenv -e .env.local -- tsx src/scripts/setup-treasury.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

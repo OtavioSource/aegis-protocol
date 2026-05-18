@@ -30,6 +30,13 @@ const EnvSchema = z.object({
   TREASURY_PUBLIC_KEY: z.string().optional(),
   TREASURY_SECRET: z.string().optional(),
 
+  // Vendor key encryption (Modo AEGIS — cifra secret keys de vendor antes de persistir)
+  // Gerar com: node -e "console.log(crypto.randomBytes(32).toString('hex'))"
+  VENDOR_KEY_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/i, 'VENDOR_KEY_ENCRYPTION_KEY must be 64 hex chars (32 bytes)')
+    .optional(),
+
   // Anchor SEP-24
   SEP24_ANCHOR_HOME_DOMAIN: z.string().default('testanchor.stellar.org'),
   SEP24_ANCHOR_TOML_URL: z

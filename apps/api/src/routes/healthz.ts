@@ -27,6 +27,7 @@ const healthzRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       service: 'aegis-api',
       version: '0.0.1',
       network: env.STELLAR_NETWORK,
+      treasuryPublicKey: app.stellar.treasuryPublicKey,
       checks: {
         db: dbStatus,
       },

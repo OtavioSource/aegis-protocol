@@ -23,6 +23,7 @@ import authAgent from './plugins/auth-agent.js';
 import errorHandler from './plugins/error-handler.js';
 import prismaPlugin from './plugins/prisma.js';
 import rateLimitPlugin from './plugins/rate-limit.js';
+import stellarPlugin from './plugins/stellar.js';
 import agentsRoute from './routes/agents.js';
 import approvalsRoute from './routes/approvals.js';
 import auditRoute from './routes/audit.js';
@@ -57,6 +58,7 @@ async function main(): Promise<void> {
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, { origin: true });
   await app.register(prismaPlugin);
+  await app.register(stellarPlugin);
   await app.register(authAgent);
   await app.register(rateLimitPlugin);
 

@@ -6,17 +6,25 @@
  * Vendor é apenas um registro lógico.
  */
 
-import { VendorStatus } from '@prisma/client';
+import { VendorStatus, VendorWalletStatus } from '@prisma/client';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
-import { NotFoundError } from '../lib/errors.js';
+import { env } from '../env.js';
+import { ConflictError, NotFoundError } from '../lib/errors.js';
+import { sponsorVendorWallet } from '../services/vendor-sponsoring.js';
 
 const CreateVendorBody = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2_000).optional(),
   preferredAsset: z.string().min(1).max(12).regex(/^[A-Z0-9]+$/).default('USDC'),
   metadata: z.record(z.unknown()).optional(),
+  /**
+   * Se true, executa sponsoring CAP-33 on-chain imediatamente após criar o
+   * Vendor (4-op atomic tx). Default false — sponsoring pode ser disparado
+   * posteriormente via POST /v1/vendors/:id/wallets/sponsor.
+   */
+  sponsorWallet: z.boolean().default(false),
 });
 
 const PatchVendorBody = z.object({
@@ -63,9 +71,76 @@ const vendorsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         metadata: (body.metadata ?? {}) as object,
       },
     });
+
+    let walletInfo: Record<string, unknown> | null = null;
+    if (body.sponsorWallet) {
+      if (!env.VENDOR_KEY_ENCRYPTION_KEY) {
+        throw new ConflictError(
+          'VENDOR_KEY_ENCRYPTION_KEY not configured; cannot sponsor vendor wallet.',
+        );
+      }
+      const result = await sponsorVendorWallet(app.prisma, {
+        app,
+        vendor: created,
+        encryptionKey: env.VENDOR_KEY_ENCRYPTION_KEY,
+        network: env.STELLAR_NETWORK,
+        usdcIssuer: env.USDC_ASSET_ISSUER,
+      });
+      walletInfo = {
+        publicKey: result.vendorWallet.publicKey,
+        status: result.vendorWallet.status,
+        sponsorshipTxHash: result.txHash,
+        xlmLocked: result.xlmLocked,
+        stellarExpertUrl: `https://stellar.expert/explorer/${
+          env.STELLAR_NETWORK === 'mainnet' ? 'public' : 'testnet'
+        }/tx/${result.txHash}`,
+      };
+    }
+
     reply.code(201);
-    return created;
+    return { ...created, wallet: walletInfo };
   });
+
+  // ----- POST /v1/vendors/:id/wallets/sponsor (cria wallet sponsoreada) -----
+  app.post<{ Params: { id: string } }>(
+    '/v1/vendors/:id/wallets/sponsor',
+    async (request, reply) => {
+      const caller = request.requireAgent();
+      if (!env.VENDOR_KEY_ENCRYPTION_KEY) {
+        throw new ConflictError(
+          'VENDOR_KEY_ENCRYPTION_KEY not configured; cannot sponsor vendor wallet.',
+        );
+      }
+      const vendor = await app.prisma.vendor.findFirst({
+        where: { id: request.params.id, companyId: caller.companyId },
+      });
+      if (!vendor) throw new NotFoundError(`Vendor ${request.params.id} not found`);
+
+      const result = await sponsorVendorWallet(app.prisma, {
+        app,
+        vendor,
+        encryptionKey: env.VENDOR_KEY_ENCRYPTION_KEY,
+        network: env.STELLAR_NETWORK,
+        usdcIssuer: env.USDC_ASSET_ISSUER,
+      });
+
+      reply.code(result.alreadyExisted ? 200 : 201);
+      return {
+        vendor: { id: vendor.id, name: vendor.name, preferredAsset: vendor.preferredAsset },
+        wallet: {
+          id: result.vendorWallet.id,
+          publicKey: result.vendorWallet.publicKey,
+          status: result.vendorWallet.status,
+          sponsorshipTxHash: result.txHash,
+          xlmLocked: result.xlmLocked,
+          stellarExpertUrl: `https://stellar.expert/explorer/${
+            env.STELLAR_NETWORK === 'mainnet' ? 'public' : 'testnet'
+          }/tx/${result.txHash}`,
+        },
+        alreadyExisted: result.alreadyExisted,
+      };
+    },
+  );
 
   // ----- PATCH -----
   app.patch<{ Params: { id: string } }>('/v1/vendors/:id', async (request) => {

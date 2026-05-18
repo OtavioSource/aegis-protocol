@@ -116,25 +116,37 @@ async function main(): Promise<void> {
     });
   }
 
-  // ============ Agent (sempre regenera API key) ============
-  await prisma.agent.deleteMany({
-    where: { companyId: company.id, name: 'Customer Success Bot' },
-  });
-
+  // ============ Agent (regenera API key, preserva histórico) ============
+  // Estratégia: upsert por (companyId, name) regenera apenas apiKeyHash/prefix.
+  // Mantém SpendRequests e AuditEvents existentes (FK preservada).
   const { apiKey, prefix } = generateApiKey();
   const apiKeyHash = await bcrypt.hash(apiKey, BCRYPT_ROUNDS);
-  const agent = await prisma.agent.create({
-    data: {
-      companyId: company.id,
-      name: 'Customer Success Bot',
-      description: 'Agente Claude/GPT pra automatizar atendimento tier-1',
-      apiKeyHash,
-      apiKeyPrefix: prefix,
-      activePolicyId: policy.id,
-      status: AgentStatus.ACTIVE,
-      metadata: { team: 'cs', model: 'claude-opus-4-7' },
-    },
+  const existingAgent = await prisma.agent.findFirst({
+    where: { companyId: company.id, name: 'Customer Success Bot' },
   });
+  const agent = existingAgent
+    ? await prisma.agent.update({
+        where: { id: existingAgent.id },
+        data: {
+          apiKeyHash,
+          apiKeyPrefix: prefix,
+          activePolicyId: policy.id,
+          status: AgentStatus.ACTIVE,
+          revokedAt: null,
+        },
+      })
+    : await prisma.agent.create({
+        data: {
+          companyId: company.id,
+          name: 'Customer Success Bot',
+          description: 'Agente Claude/GPT pra automatizar atendimento tier-1',
+          apiKeyHash,
+          apiKeyPrefix: prefix,
+          activePolicyId: policy.id,
+          status: AgentStatus.ACTIVE,
+          metadata: { team: 'cs', model: 'claude-opus-4-7' },
+        },
+      });
   console.log(`🤖 Agent: ${agent.name} (${agent.apiKeyPrefix}…)`);
   console.log('\n   ⚠  API KEY (exibida UMA vez — salve agora se for usar):');
   console.log(`   ${apiKey}\n`);
