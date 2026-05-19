@@ -212,6 +212,9 @@ importers:
       decimal.js:
         specifier: ^10.4.0
         version: 10.6.0
+      lru-cache:
+        specifier: ^11.0.0
+        version: 11.3.6
     devDependencies:
       typescript:
         specifier: ^5.7.0

@@ -28,6 +28,7 @@ import agentsRoute from './routes/agents.js';
 import approvalsRoute from './routes/approvals.js';
 import auditRoute from './routes/audit.js';
 import companiesRoute from './routes/companies.js';
+import fiatRoute from './routes/fiat.js';
 import healthz from './routes/healthz.js';
 import policiesRoute from './routes/policies.js';
 import spendRequestsRoute from './routes/spend-requests.js';
@@ -71,6 +72,7 @@ async function main(): Promise<void> {
   await app.register(spendRequestsRoute);
   await app.register(approvalsRoute);
   await app.register(auditRoute);
+  await app.register(fiatRoute);
 
   try {
     await app.listen({ port: env.PORT, host: env.HOST });

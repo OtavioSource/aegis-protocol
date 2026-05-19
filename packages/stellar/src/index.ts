@@ -22,6 +22,8 @@ export * from './assets.js';
 export * from './encryption.js';
 export * from './friendbot.js';
 export * from './trustline.js';
+export * from './sep10.js';
+export * from './sep24.js';
 export * from './sponsoring.js';
 export * from './payment.js';
 export * from './adapter.js';

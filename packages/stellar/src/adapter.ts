@@ -28,12 +28,21 @@ import type {
 import { ChainType } from '@aegis/shared';
 import { type Horizon, Keypair } from '@stellar/stellar-sdk';
 
+import { findAnchorAssetIssuer, resolveAnchorToml } from './anchor-toml.js';
 import { resolveAsset } from './assets.js';
 import { createHorizonServer } from './horizon.js';
 import { loadTreasuryKey } from './keypair.js';
 import type { NetworkConfig, NetworkKind } from './network.js';
 import { resolveNetwork } from './network.js';
 import { executePayment } from './payment.js';
+import { authenticateWithAnchor } from './sep10.js';
+import {
+  isTerminalSep24Status,
+  type Sep24DepositResponse,
+  type Sep24Transaction,
+  sep24GetTransaction,
+  sep24InitiateDeposit,
+} from './sep24.js';
 import { sponsorVendor } from './sponsoring.js';
 
 export interface StellarSettlementAdapterOptions {
@@ -114,6 +123,84 @@ export class StellarSettlementAdapter implements SettlementAdapter {
       memoHash: params.memoHash,
     });
     return { txHash: result.txHash, ledger: result.ledger };
+  }
+
+  // ============ SEP-24 (fiat ramp) ============
+
+  /**
+   * Inicia um deposit SEP-24 no anchor configurado. Retorna a URL interactive
+   * que o admin deve abrir em browser para completar KYC e dados bancários.
+   *
+   * Cycle:
+   * 1. Resolve TOML do anchor (cached) → endpoints SEP-10 + SEP-24 + SIGNING_KEY
+   * 2. SEP-10 authenticate (JWT cached por ~23h)
+   * 3. POST /transactions/deposit/interactive → recebe id + url
+   */
+  async initiateDeposit(params: {
+    assetCode: string;
+    amount?: string;
+  }): Promise<Sep24DepositResponse> {
+    const ctx = await this.resolveAnchorContext();
+    const jwt = await authenticateWithAnchor({
+      network: this.networkConfig,
+      webAuthEndpoint: ctx.webAuthEndpoint,
+      anchorHomeDomain: this.anchorDomain,
+      anchorSigningKey: ctx.signingKey,
+      treasuryKeypair: this.treasuryKeypair,
+    });
+    const assetIssuer = await findAnchorAssetIssuer(this.anchorDomain, params.assetCode);
+    return await sep24InitiateDeposit({
+      transferServer: ctx.transferServer,
+      jwt,
+      assetCode: params.assetCode,
+      assetIssuer: assetIssuer ?? undefined,
+      amount: params.amount,
+      account: this.treasuryKeypair.publicKey(),
+    });
+  }
+
+  /**
+   * Consulta status de uma transação SEP-24 no anchor.
+   * Caller deve verificar `isTerminalSep24Status(result.status)` para decidir
+   * se faz polling de novo ou para.
+   */
+  async pollDepositStatus(transactionId: string): Promise<Sep24Transaction> {
+    const ctx = await this.resolveAnchorContext();
+    const jwt = await authenticateWithAnchor({
+      network: this.networkConfig,
+      webAuthEndpoint: ctx.webAuthEndpoint,
+      anchorHomeDomain: this.anchorDomain,
+      anchorSigningKey: ctx.signingKey,
+      treasuryKeypair: this.treasuryKeypair,
+    });
+    return await sep24GetTransaction({
+      transferServer: ctx.transferServer,
+      jwt,
+      transactionId,
+    });
+  }
+
+  /** Conveniência: true se status terminal. */
+  isTerminalDepositStatus(status: string): boolean {
+    return isTerminalSep24Status(status);
+  }
+
+  private async resolveAnchorContext(): Promise<{
+    transferServer: string;
+    webAuthEndpoint: string;
+    signingKey: string;
+  }> {
+    const toml = await resolveAnchorToml(this.anchorDomain);
+    const transferServer = toml.TRANSFER_SERVER_SEP0024 ?? toml.TRANSFER_SERVER;
+    const webAuthEndpoint = toml.WEB_AUTH_ENDPOINT;
+    const signingKey = toml.SIGNING_KEY;
+    if (!transferServer || !webAuthEndpoint || !signingKey) {
+      throw new Error(
+        `Anchor ${this.anchorDomain} missing required TOML fields ` +
+          `(TRANSFER_SERVER_SEP0024, WEB_AUTH_ENDPOINT, SIGNING_KEY)`,
+      );
+    }
+    return { transferServer, webAuthEndpoint, signingKey };
   }
 
   async getTreasuryBalance(assetCode: AssetCode): Promise<TreasuryBalance> {

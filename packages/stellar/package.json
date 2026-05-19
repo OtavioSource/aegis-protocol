@@ -22,7 +22,8 @@
     "@aegis/shared": "workspace:*",
     "@stellar/stellar-sdk": "^13.1.0",
     "axios": "^1.7.0",
-    "decimal.js": "^10.4.0"
+    "decimal.js": "^10.4.0",
+    "lru-cache": "^11.0.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
