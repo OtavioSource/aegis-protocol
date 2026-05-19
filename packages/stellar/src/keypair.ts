@@ -50,3 +50,11 @@ export function generateKeypairStrings(): { publicKey: string; secret: string } 
   const keypair = Keypair.random();
   return { publicKey: keypair.publicKey(), secret: keypair.secret() };
 }
+
+/**
+ * Deriva o publicKey de um secret Stellar (formato `S...`).
+ * Útil para verificar que `secret` decifrado bate com `publicKey` persistida.
+ */
+export function publicKeyFromSecret(secret: string): string {
+  return Keypair.fromSecret(secret).publicKey();
+}

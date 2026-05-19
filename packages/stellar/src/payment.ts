@@ -126,8 +126,37 @@ export async function executePayment(
   const tx = txBuilder.setTimeout(60).build();
   tx.sign(treasuryKeypair);
 
-  const result = await horizon.submitTransaction(tx);
-  return { txHash: result.hash, ledger: result.ledger, operationType, sourceAmount };
+  try {
+    const result = await horizon.submitTransaction(tx);
+    return { txHash: result.hash, ledger: result.ledger, operationType, sourceAmount };
+  } catch (err) {
+    throw new Error(extractHorizonError(err));
+  }
+}
+
+/**
+ * Extrai mensagem útil de um erro do Horizon.
+ *
+ * Horizon retorna 400 com body tipo:
+ *   { extras: { result_codes: { transaction: "tx_failed", operations: ["op_underfunded"] } } }
+ *
+ * Esta função tenta extrair esses códigos e produz mensagem legível.
+ */
+export function extractHorizonError(err: unknown): string {
+  const e = err as {
+    response?: { data?: { extras?: { result_codes?: { transaction?: string; operations?: string[] } } } };
+    message?: string;
+  };
+  const codes = e?.response?.data?.extras?.result_codes;
+  if (codes) {
+    const parts: string[] = [];
+    if (codes.transaction) parts.push(codes.transaction);
+    if (codes.operations && codes.operations.length > 0) {
+      parts.push(`ops=[${codes.operations.join(',')}]`);
+    }
+    return `Stellar Horizon error: ${parts.join(' ')}`;
+  }
+  return e?.message ?? 'Unknown Stellar error';
 }
 
 /** Compara dois assets por identidade (code + issuer ou ambos native). */

@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 import { env } from '../env.js';
 import { ConflictError, NotFoundError } from '../lib/errors.js';
+import { executeSpendRequestPayment } from '../services/payment-executor.js';
 import { serializeSpendRequest } from '../services/spend-request.js';
 
 const ApprovalBody = z.object({
@@ -88,8 +89,15 @@ const approvalsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         }),
       ]);
 
+      // Se aprovado pelo humano, dispara execução on-chain (síncrona).
+      if (body.action === ApprovalAction.APPROVED) {
+        await executeSpendRequestPayment(app.prisma, { app, spendRequestId: sr.id });
+      }
+
+      // Re-lê para refletir txHash/status pós-execução
+      const final = await app.prisma.spendRequest.findUnique({ where: { id: sr.id } });
       return {
-        spendRequest: serializeSpendRequest(updated, {
+        spendRequest: serializeSpendRequest(final ?? updated, {
           withStellarExpertUrl: true,
           network: env.STELLAR_NETWORK,
         }),
