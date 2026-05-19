@@ -137,6 +137,25 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  examples/simple-agent:
+    dependencies:
+      '@aegis/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.19
+      dotenv-cli:
+        specifier: ^8.0.0
+        version: 8.0.0
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   packages/policy-engine:
     dependencies:
       '@aegis/shared':

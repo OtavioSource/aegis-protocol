@@ -1,0 +1,21 @@
+{
+  "name": "simple-agent",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Exemplo mínimo de agente consumindo @aegis/sdk",
+  "scripts": {
+    "start": "dotenv -e .env.local -- tsx index.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf .turbo"
+  },
+  "dependencies": {
+    "@aegis/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "dotenv-cli": "^8.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

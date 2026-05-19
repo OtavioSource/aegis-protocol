@@ -14,9 +14,11 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "lint": "echo 'lint placeholder'",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo coverage"
   },
   "dependencies": {
     "@aegis/shared": "workspace:*",
