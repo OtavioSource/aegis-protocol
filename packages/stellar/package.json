@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "lint": "echo 'lint placeholder'",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .turbo"

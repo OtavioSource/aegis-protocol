@@ -346,14 +346,24 @@ model FiatDeposit {
   id                  String                @id @default(uuid()) @db.Uuid
   companyId           String                @db.Uuid
   userId              String                @db.Uuid
+  /// Provider do anchor: "stellar-test-anchor" (SEP-24) | "etherfuse-sandbox" | "etherfuse"
   anchorId            String                @db.VarChar(64)
   anchorTransactionId String                @db.VarChar(128)
-  interactiveUrl      String                @db.Text
+  /// SEP-24: URL hosted interactive (KYC + dados bancários no anchor).
+  /// Etherfuse: NULL — instruções vêm em `instructions` (Pix key, valor, expiração).
+  interactiveUrl      String?               @db.Text
+  /// Etherfuse: { pixKey, pixValue, expiresAt, qrCode? } ou outros campos do provider.
+  instructions        Json?
+  /// Source asset que o usuário paga (BRL, MXN, USD). NULL = mesma do `asset`.
+  sourceAsset         String?               @db.VarChar(12)
+  /// Source amount em smallest unit (centavos BRL, etc.). NULL = derivado de amountCents.
+  sourceAmountCents   BigInt?
+  /// Target asset que entra na treasury (USDC, EURC, TESOURO).
   amountCents         BigInt?
   actualAmountCents   BigInt?
   asset               String                @db.VarChar(12)
   status              FiatTransactionStatus @default(INITIATED)
-  /// Hash da tx Stellar que creditou USDC na treasury
+  /// Hash da tx Stellar que creditou o asset na treasury
   txHash              String?               @db.VarChar(128)
   failureReason       String?               @db.Text
   createdAt           DateTime              @default(now())

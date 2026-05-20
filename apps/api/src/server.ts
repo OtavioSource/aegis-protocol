@@ -21,6 +21,7 @@ import {
 import { env } from './env.js';
 import authAgent from './plugins/auth-agent.js';
 import errorHandler from './plugins/error-handler.js';
+import etherfusePlugin from './plugins/etherfuse.js';
 import prismaPlugin from './plugins/prisma.js';
 import rateLimitPlugin from './plugins/rate-limit.js';
 import stellarPlugin from './plugins/stellar.js';
@@ -60,6 +61,7 @@ async function main(): Promise<void> {
   await app.register(cors, { origin: true });
   await app.register(prismaPlugin);
   await app.register(stellarPlugin);
+  await app.register(etherfusePlugin);
   await app.register(authAgent);
   await app.register(rateLimitPlugin);
 

@@ -5,10 +5,10 @@
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "dotenv -e .env.local -- tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "lint": "echo 'lint placeholder — eslint configured later'",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .turbo",
@@ -20,7 +20,8 @@
     "db:seed": "dotenv -e .env.local -- prisma db seed",
     "db:studio": "dotenv -e .env.local -- prisma studio",
     "db:validate": "dotenv -e .env.local -- prisma validate",
-    "setup:treasury": "dotenv -e .env.local -- tsx src/scripts/setup-treasury.ts"
+    "setup:treasury": "dotenv -e .env.local -- tsx src/scripts/setup-treasury.ts",
+    "setup:etherfuse": "dotenv -e .env.local -- tsx src/scripts/setup-etherfuse.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -37,6 +37,15 @@ const EnvSchema = z.object({
     .regex(/^[0-9a-f]{64}$/i, 'VENDOR_KEY_ENCRYPTION_KEY must be 64 hex chars (32 bytes)')
     .optional(),
 
+  // Etherfuse anchor (LATAM — BRL/MXN via Pix/SPEI)
+  // Cadastre na devnet.etherfuse.com → Ramp → API Keys → Create Key
+  ETHERFUSE_BASE_URL: z.string().url().default('https://api.sand.etherfuse.com'),
+  ETHERFUSE_API_KEY: z.string().optional(), // format: api_sand:... (sandbox) ou api_prod:... (prod)
+  /// Etherfuse customerId (1 por usuário; no MVP, 1 fixo para a treasury Aegis)
+  ETHERFUSE_CUSTOMER_ID: z.string().optional(),
+  /// Etherfuse bankAccountId (gerado via hosted onboarding URL após KYC)
+  ETHERFUSE_BANK_ACCOUNT_ID: z.string().optional(),
+
   // Anchor SEP-24
   SEP24_ANCHOR_HOME_DOMAIN: z.string().default('testanchor.stellar.org'),
   SEP24_ANCHOR_TOML_URL: z
