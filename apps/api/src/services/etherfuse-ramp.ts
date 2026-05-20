@@ -259,17 +259,20 @@ const ETHERFUSE_TO_DB_STATUS: Record<EtherfuseOrderStatus, FiatTransactionStatus
   created: FiatTransactionStatus.PENDING_USER_TRANSFER,
   funded: FiatTransactionStatus.PROCESSING,
   completed: FiatTransactionStatus.COMPLETED,
+  finalized: FiatTransactionStatus.COMPLETED,
   failed: FiatTransactionStatus.FAILED,
   expired: FiatTransactionStatus.FAILED,
 };
 
-function mapEtherfuseStatusToDb(s: string): FiatTransactionStatus {
+/** Mapeia status de order Etherfuse → FiatTransactionStatus do DB. */
+export function mapEtherfuseStatusToDb(s: string): FiatTransactionStatus {
   return (
     ETHERFUSE_TO_DB_STATUS[s as EtherfuseOrderStatus] ?? FiatTransactionStatus.PROCESSING
   );
 }
 
-function isTerminalDbStatus(s: FiatTransactionStatus): boolean {
+/** true se o status do DB é terminal (não vale mais fazer polling). */
+export function isTerminalDbStatus(s: FiatTransactionStatus): boolean {
   return (
     s === FiatTransactionStatus.COMPLETED ||
     s === FiatTransactionStatus.FAILED ||

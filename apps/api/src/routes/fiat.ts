@@ -1,14 +1,20 @@
 /**
- * Rotas /v1/fiat/* — gestão de deposits via múltiplos anchors.
+ * Rotas /v1/fiat/* — gestão de deposits (on-ramp) e withdrawals (off-ramp).
  *
- * - POST /v1/fiat/deposits              — inicia deposit. body.provider seleciona anchor:
- *                                          "sep24" (default) | "etherfuse"
+ * Deposits (fiat → asset Stellar):
+ * - POST /v1/fiat/deposits              — body.provider: "sep24" (default) | "etherfuse"
  * - GET  /v1/fiat/deposits              — lista deposits da Company
- * - GET  /v1/fiat/deposits/:id          — status atual (auto-poll se stale; router por anchorId)
+ * - GET  /v1/fiat/deposits/:id          — status atual (auto-poll se stale)
  * - POST /v1/fiat/deposits/:id/refresh  — força poll on-demand
- * - POST /v1/fiat/deposits/:id/simulate — SANDBOX ONLY (Etherfuse): simula Pix/SPEI recebido
+ * - POST /v1/fiat/deposits/:id/simulate — SANDBOX ONLY (Etherfuse): simula Pix/SPEI
  *
- * Auth: Bearer cr_ (Agent). RBAC mais granular vem na iter 10 com NextAuth.
+ * Withdrawals (asset Stellar → fiat) — Etherfuse only:
+ * - POST /v1/fiat/withdrawals             — off-ramp: assina a burnTransaction e submete
+ * - GET  /v1/fiat/withdrawals             — lista withdrawals da Company
+ * - GET  /v1/fiat/withdrawals/:id         — status atual (auto-poll se stale)
+ * - POST /v1/fiat/withdrawals/:id/refresh — força poll on-demand
+ *
+ * Auth: Bearer cr_ (Agent). RBAC mais granular vem com NextAuth no dashboard.
  */
 
 import { FiatTransactionStatus } from '@prisma/client';
@@ -17,6 +23,11 @@ import { z } from 'zod';
 
 import { env } from '../env.js';
 import { ConflictError, NotFoundError, StellarError } from '../lib/errors.js';
+import {
+  initiateEtherfuseWithdrawal,
+  pollAndSyncEtherfuseWithdrawal,
+  serializeFiatWithdrawal,
+} from '../services/etherfuse-offramp.js';
 import {
   initiateEtherfuseDeposit,
   pollAndSyncEtherfuseDeposit,
@@ -68,6 +79,30 @@ const InitiateDepositBody = z.discriminatedUnion('provider', [
     targetAssetIdentifier: z.string().min(1),
   }),
 ]);
+
+/**
+ * Body do POST /v1/fiat/withdrawals — off-ramp via Etherfuse (asset Stellar → fiat).
+ * SEP-24 withdraw fica fora do MVP: o test-anchor SDF tem bug de SAC no settlement.
+ */
+const InitiateWithdrawalBody = z.object({
+  /** Asset Stellar que sai da treasury (code). */
+  asset: z
+    .string()
+    .min(1)
+    .max(12)
+    .regex(/^[A-Z0-9]+$/)
+    .default('USDC'),
+  /** Identifier completo "CODE:ISSUER" do asset (sourceAsset da quote off-ramp). */
+  assetIdentifier: z.string().min(1),
+  /** Quantia em centavos do asset Stellar a sacar. */
+  amountCents: z.number().int().positive(),
+  /** Moeda fiat de destino ("BRL", "MXN"). */
+  targetFiat: z
+    .string()
+    .min(1)
+    .max(12)
+    .regex(/^[A-Z]+$/),
+});
 
 const ListQuery = z.object({
   status: z.nativeEnum(FiatTransactionStatus).optional(),
@@ -228,6 +263,105 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       return serializeFiatDeposit(synced, { network: env.STELLAR_NETWORK });
     },
   );
+
+  // ----- POST /v1/fiat/withdrawals (off-ramp Etherfuse) -----
+  app.post('/v1/fiat/withdrawals', async (request, reply) => {
+    const caller = request.requireAgent();
+    const body = InitiateWithdrawalBody.parse(request.body ?? {});
+
+    const owner = await app.prisma.user.findFirst({
+      where: { companyId: caller.companyId, role: 'OWNER' },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!owner) {
+      throw new ConflictError(
+        `Company ${caller.companyId} has no OWNER user — required to initiate fiat withdrawal.`,
+      );
+    }
+    if (!app.etherfuse) {
+      throw new StellarError(
+        'Etherfuse anchor unavailable: ETHERFUSE_API_KEY not configured on this deployment.',
+      );
+    }
+    if (!app.etherfuseCustomerId || !app.etherfuseBankAccountId) {
+      throw new ConflictError(
+        'ETHERFUSE_CUSTOMER_ID / ETHERFUSE_BANK_ACCOUNT_ID not configured. ' +
+          'Run `pnpm --filter @aegis/api setup:etherfuse`.',
+      );
+    }
+
+    const result = await initiateEtherfuseWithdrawal(app.prisma, {
+      app,
+      companyId: caller.companyId,
+      userId: owner.id,
+      asset: body.asset,
+      assetIdentifier: body.assetIdentifier,
+      amountCents: body.amountCents,
+      targetFiat: body.targetFiat,
+      treasuryPublicKey: app.stellar.treasuryPublicKey,
+      customerId: app.etherfuseCustomerId,
+      bankAccountId: app.etherfuseBankAccountId,
+      client: app.etherfuse,
+    });
+
+    reply.code(201);
+    return {
+      ...serializeFiatWithdrawal(result.withdrawal, { network: env.STELLAR_NETWORK }),
+      provider: 'etherfuse',
+      sandbox: app.etherfuse.isSandbox,
+      orderId: result.orderId,
+      burnTxHash: result.burnTxHash,
+      estimatedFiat: result.estimatedFiat,
+      hint: 'burnTransaction submetida on-chain. O Etherfuse paga o fiat após confirmar o burn; ' +
+        'use GET /v1/fiat/withdrawals/:id ou /refresh para acompanhar.',
+    };
+  });
+
+  // ----- GET /v1/fiat/withdrawals -----
+  app.get('/v1/fiat/withdrawals', async (request) => {
+    const caller = request.requireAgent();
+    const query = ListQuery.parse(request.query);
+
+    const items = await app.prisma.fiatWithdrawal.findMany({
+      where: {
+        companyId: caller.companyId,
+        ...(query.status ? { status: query.status } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: query.limit,
+    });
+
+    return {
+      data: items.map((w) => serializeFiatWithdrawal(w, { network: env.STELLAR_NETWORK })),
+    };
+  });
+
+  // ----- GET /v1/fiat/withdrawals/:id -----
+  app.get<{ Params: { id: string } }>('/v1/fiat/withdrawals/:id', async (request) => {
+    const caller = request.requireAgent();
+    const existing = await app.prisma.fiatWithdrawal.findFirst({
+      where: { id: request.params.id, companyId: caller.companyId },
+    });
+    if (!existing) throw new NotFoundError(`FiatWithdrawal ${request.params.id} not found`);
+
+    const synced = await syncWithdrawal(app, existing.id, false);
+    return serializeFiatWithdrawal(synced, { network: env.STELLAR_NETWORK });
+  });
+
+  // ----- POST /v1/fiat/withdrawals/:id/refresh -----
+  app.post<{ Params: { id: string } }>(
+    '/v1/fiat/withdrawals/:id/refresh',
+    async (request) => {
+      const caller = request.requireAgent();
+      const existing = await app.prisma.fiatWithdrawal.findFirst({
+        where: { id: request.params.id, companyId: caller.companyId },
+      });
+      if (!existing) throw new NotFoundError(`FiatWithdrawal ${request.params.id} not found`);
+
+      const synced = await syncWithdrawal(app, existing.id, true);
+      return serializeFiatWithdrawal(synced, { network: env.STELLAR_NETWORK });
+    },
+  );
 };
 
 /**
@@ -249,6 +383,20 @@ async function syncByAnchor(
   }
   // Default: SEP-24
   return await pollAndSyncDeposit(app.prisma, app, depositId, { force });
+}
+
+/**
+ * Sincroniza um FiatWithdrawal. Withdrawals são Etherfuse-only no MVP.
+ */
+async function syncWithdrawal(app: FastifyInstance, withdrawalId: string, force: boolean) {
+  if (!app.etherfuse) {
+    throw new StellarError(
+      `FiatWithdrawal ${withdrawalId} is from Etherfuse but client not configured on this deployment.`,
+    );
+  }
+  return await pollAndSyncEtherfuseWithdrawal(app.prisma, app, app.etherfuse, withdrawalId, {
+    force,
+  });
 }
 
 export default fiatRoute;

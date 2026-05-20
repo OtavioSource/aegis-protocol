@@ -26,7 +26,7 @@ import type {
   TreasuryBalance,
 } from '@aegis/shared';
 import { ChainType } from '@aegis/shared';
-import { type Horizon, Keypair } from '@stellar/stellar-sdk';
+import { type Horizon, Keypair, TransactionBuilder } from '@stellar/stellar-sdk';
 
 import { findAnchorAssetIssuer, resolveAnchorToml } from './anchor-toml.js';
 import { resolveAsset } from './assets.js';
@@ -34,7 +34,7 @@ import { createHorizonServer } from './horizon.js';
 import { loadTreasuryKey } from './keypair.js';
 import type { NetworkConfig, NetworkKind } from './network.js';
 import { resolveNetwork } from './network.js';
-import { executePayment } from './payment.js';
+import { executePayment, extractHorizonError } from './payment.js';
 import { authenticateWithAnchor } from './sep10.js';
 import {
   isTerminalSep24Status,
@@ -123,6 +123,31 @@ export class StellarSettlementAdapter implements SettlementAdapter {
       memoHash: params.memoHash,
     });
     return { txHash: result.txHash, ledger: result.ledger };
+  }
+
+  /**
+   * Assina uma transação Stellar pré-montada (XDR base64) com a chave da
+   * treasury e submete ao Horizon.
+   *
+   * Usado no off-ramp Etherfuse: o anchor devolve uma `burnTransaction`
+   * (source = treasury, sequence já fixada no momento da order) que a
+   * treasury só precisa assinar e submeter. Deve ser submetida prontamente
+   * — qualquer outra tx da treasury invalidaria a sequence.
+   */
+  async signAndSubmitXdr(xdr: string): Promise<{ txHash: string; ledger: number }> {
+    let tx: ReturnType<typeof TransactionBuilder.fromXDR>;
+    try {
+      tx = TransactionBuilder.fromXDR(xdr, this.networkConfig.passphrase);
+    } catch (err) {
+      throw new Error(`Invalid transaction XDR: ${(err as Error).message}`);
+    }
+    tx.sign(this.treasuryKeypair);
+    try {
+      const result = await this.horizon.submitTransaction(tx);
+      return { txHash: result.hash, ledger: result.ledger };
+    } catch (err) {
+      throw new Error(extractHorizonError(err));
+    }
   }
 
   // ============ SEP-24 (fiat ramp) ============

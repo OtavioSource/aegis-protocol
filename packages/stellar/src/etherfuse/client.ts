@@ -251,6 +251,7 @@ export class EtherfuseClient {
       orderId: order.orderId,
       status: order.status,
       paymentInstructions: order.paymentInstructions,
+      burnTransaction: order.burnTransaction,
     };
   }
 
@@ -301,6 +302,7 @@ export class EtherfuseClient {
       destinationAmount: src.destinationAmount,
       stellarTxHash: src.stellarTxHash ?? src.stellarTransactionId ?? src.transactionHash,
       stellarTransactionId: src.stellarTransactionId,
+      burnTransaction: src.burnTransaction,
       message: src.message,
       createdAt: src.createdAt,
       completedAt: src.completedAt,

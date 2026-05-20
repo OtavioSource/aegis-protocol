@@ -173,26 +173,32 @@ export interface CreateOrderRequest {
 export interface CreateOrderResponse {
   orderId: string;
   status: EtherfuseOrderStatus;
-  /** Instruções de pagamento (SPEI: clabe; Pix: pixKey; etc.). */
+  /** Instruções de pagamento (SPEI: clabe; Pix: pixKey; etc.). On-ramp. */
   paymentInstructions?: Record<string, unknown>;
+  /** Off-ramp: tx Stellar pré-montada (XDR base64) que queima os tokens. */
+  burnTransaction?: string;
 }
 
 /**
  * Status reais observados na Ramp API (sandbox + docs):
- *  - created   — order criada, aguardando o fiat ser pago (Pix/SPEI)
- *  - funded    — fiat recebido, settlement on-chain em andamento
- *  - completed — asset entregue na wallet
+ *  - created   — order criada; on-ramp: aguardando fiat (Pix/SPEI);
+ *                off-ramp: aguardando a burnTransaction ser submetida
+ *  - funded    — on-ramp: fiat recebido; off-ramp: burn confirmado on-chain
+ *  - completed — asset/fiat entregue
+ *  - finalized — off-ramp: janela de reversão passou (terminal)
  *  - failed / expired — terminais de erro
  */
 export type EtherfuseOrderStatus =
   | 'created'
   | 'funded'
   | 'completed'
+  | 'finalized'
   | 'failed'
   | 'expired';
 
 export const TERMINAL_ETHERFUSE_STATUSES: ReadonlyArray<EtherfuseOrderStatus> = [
   'completed',
+  'finalized',
   'failed',
   'expired',
 ];
@@ -204,16 +210,18 @@ export function isTerminalEtherfuseStatus(s: string): boolean {
 export interface EtherfuseOrder {
   orderId: string;
   status: EtherfuseOrderStatus;
-  /** Valor pago em fiat (amountInFiat). */
+  /** On-ramp: valor pago em fiat. Off-ramp: valor em tokens (amountInTokens). */
   sourceAmount?: string;
-  /** Valor a receber/recebido em asset Stellar (amountInTokens). */
+  /** On-ramp: tokens recebidos. Off-ramp: fiat a receber (destinationAmount). */
   targetAmount?: string;
-  /** Valor efetivamente creditado quando completed. */
+  /** Valor efetivamente liquidado quando completed. */
   actualAmount?: string;
   destinationAmount?: string;
   /** Hash da tx Stellar quando settle on-chain (ausente no sandbox). */
   stellarTxHash?: string;
   stellarTransactionId?: string;
+  /** Off-ramp: tx Stellar pré-montada (XDR base64) que queima os tokens. */
+  burnTransaction?: string;
   message?: string;
   createdAt?: string;
   completedAt?: string;
@@ -241,6 +249,8 @@ export interface RawEtherfuseOrderFields {
   message?: string;
   createdAt?: string;
   completedAt?: string;
+  /** Off-ramp: tx Stellar pré-montada (XDR base64) que queima os tokens. */
+  burnTransaction?: string;
   /** Página hosted de status da order. */
   statusPage?: string;
   /** Instruções de depósito (flat na resposta da Ramp API). */

@@ -381,12 +381,19 @@ model FiatWithdrawal {
   id                    String                @id @default(uuid()) @db.Uuid
   companyId             String                @db.Uuid
   userId                String                @db.Uuid
+  /// Provider do anchor: "stellar-test-anchor" (SEP-24) | "etherfuse-sandbox" | "etherfuse-prod"
   anchorId              String                @db.VarChar(64)
   anchorTransactionId   String                @db.VarChar(128)
-  interactiveUrl        String                @db.Text
+  /// SEP-24: URL hosted interactive. Etherfuse: NULL (off-ramp via burnTransaction assinada).
+  interactiveUrl        String?               @db.Text
+  /// Etherfuse: { targetFiat, destinationAmount, exchangeRate, statusPage }.
+  instructions          Json?
+  /// Asset Stellar que sai da treasury (USDC). amountCents = valor em centavos.
   amountCents           BigInt?
   actualAmountCents     BigInt?
   asset                 String                @db.VarChar(12)
+  /// Moeda fiat recebida pelo off-ramp (BRL, MXN). NULL = não-fiat / SEP-24.
+  targetFiat            String?               @db.VarChar(12)
   status                FiatTransactionStatus @default(INITIATED)
   /// Hash da tx Stellar que enviou USDC da treasury para o anchor
   txHash                String?               @db.VarChar(128)
