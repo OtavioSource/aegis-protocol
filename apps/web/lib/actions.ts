@@ -1,0 +1,227 @@
+'use server';
+
+/**
+ * Server actions do dashboard — todas falam com a Aegis API via `lib/api`.
+ * Cada action devolve ActionState (consumido pelo <ActionForm> client) e
+ * revalida a rota afetada.
+ */
+
+import { randomUUID } from 'node:crypto';
+
+import { revalidatePath } from 'next/cache';
+
+import type { ActionState } from '@/components/action-form';
+import { api, ApiError } from '@/lib/api';
+
+function str(fd: FormData, key: string): string {
+  return String(fd.get(key) ?? '').trim();
+}
+
+function intOrNull(fd: FormData, key: string): number | null {
+  const v = str(fd, key);
+  if (v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+function fail(message: string): ActionState {
+  return { ok: false, message };
+}
+
+async function run(fn: () => Promise<ActionState>): Promise<ActionState> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof ApiError) return fail(err.message);
+    return fail((err as Error).message || 'Erro inesperado');
+  }
+}
+
+// ----------------------------------------------------------- approvals ----
+
+export async function approveSpend(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = str(fd, 'spendRequestId');
+    const action = str(fd, 'action'); // APPROVED | REJECTED
+    if (!id || !action) return fail('spendRequestId e action obrigatórios');
+    await api.post(`/v1/approvals/${id}`, {
+      action,
+      reason: str(fd, 'reason') || undefined,
+    });
+    revalidatePath('/approvals');
+    revalidatePath('/spend-requests');
+    revalidatePath('/');
+    return { ok: true, message: action === 'APPROVED' ? 'Aprovado e executado.' : 'Rejeitado.' };
+  });
+}
+
+// ------------------------------------------------------- spend requests ----
+
+export async function createSpendRequest(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const amountCents = intOrNull(fd, 'amountCents');
+    if (!amountCents || amountCents <= 0) return fail('amountCents deve ser positivo');
+    await api.post(
+      '/v1/spend-requests',
+      {
+        vendorId: str(fd, 'vendorId'),
+        amountCents,
+        asset: str(fd, 'asset') || 'USDC',
+        actionType: str(fd, 'actionType'),
+        reason: str(fd, 'reason') || undefined,
+      },
+      { 'Idempotency-Key': randomUUID() },
+    );
+    revalidatePath('/spend-requests');
+    revalidatePath('/');
+    return { ok: true, message: 'Spend request criada.' };
+  });
+}
+
+// ------------------------------------------------------------ policies ----
+
+export async function createPolicy(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const name = str(fd, 'name');
+    if (!name) return fail('Nome obrigatório');
+    const actionTypes = str(fd, 'actionTypes')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    await api.post('/v1/policies', {
+      name,
+      rules: {
+        maxPerTransactionCents: intOrNull(fd, 'maxPerTransactionCents'),
+        monthlyBudgetCents: intOrNull(fd, 'monthlyBudgetCents'),
+        humanApprovalThresholdCents: intOrNull(fd, 'humanApprovalThresholdCents'),
+        vendorAllowList: [],
+        vendorDenyList: [],
+        actionTypes,
+      },
+    });
+    revalidatePath('/policies');
+    return { ok: true, message: 'Política criada.' };
+  });
+}
+
+// -------------------------------------------------------------- agents ----
+
+export async function createAgent(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const name = str(fd, 'name');
+    const activePolicyId = str(fd, 'activePolicyId');
+    if (!name || !activePolicyId) return fail('Nome e política obrigatórios');
+    const created = await api.post<{ apiKey: string }>('/v1/agents', {
+      name,
+      description: str(fd, 'description') || undefined,
+      activePolicyId,
+    });
+    revalidatePath('/agents');
+    return { ok: true, message: 'Agente criado.', secret: created.apiKey };
+  });
+}
+
+// ------------------------------------------------------------- vendors ----
+
+export async function createVendor(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const name = str(fd, 'name');
+    if (!name) return fail('Nome obrigatório');
+    await api.post('/v1/vendors', {
+      name,
+      description: str(fd, 'description') || undefined,
+      preferredAsset: str(fd, 'preferredAsset') || 'USDC',
+      sponsorWallet: str(fd, 'sponsorWallet') === 'on',
+    });
+    revalidatePath('/vendors');
+    return { ok: true, message: 'Vendor criado.' };
+  });
+}
+
+export async function sponsorWallet(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = str(fd, 'vendorId');
+    if (!id) return fail('vendorId obrigatório');
+    const res = await api.post<{ wallet: { publicKey: string } }>(
+      `/v1/vendors/${id}/wallets/sponsor`,
+    );
+    revalidatePath('/vendors');
+    return { ok: true, message: `Wallet sponsoreada: ${res.wallet.publicKey}` };
+  });
+}
+
+// ---------------------------------------------------------------- fiat ----
+
+export async function initiateDeposit(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const provider = str(fd, 'provider') || 'etherfuse';
+    if (provider === 'etherfuse') {
+      const sourceAmountCents = intOrNull(fd, 'sourceAmountCents');
+      if (!sourceAmountCents || sourceAmountCents <= 0) {
+        return fail('sourceAmountCents deve ser positivo');
+      }
+      await api.post('/v1/fiat/deposits', {
+        provider: 'etherfuse',
+        sourceAsset: str(fd, 'sourceAsset') || 'BRL',
+        sourceAmountCents,
+        asset: str(fd, 'asset') || 'USDC',
+        targetAssetIdentifier: str(fd, 'targetAssetIdentifier'),
+      });
+    } else {
+      const amountCents = intOrNull(fd, 'amountCents');
+      if (!amountCents || amountCents <= 0) return fail('amountCents deve ser positivo');
+      await api.post('/v1/fiat/deposits', {
+        provider: 'sep24',
+        amountCents,
+        asset: str(fd, 'asset') || 'USDC',
+      });
+    }
+    revalidatePath('/fiat');
+    return { ok: true, message: 'Deposit iniciado.' };
+  });
+}
+
+export async function simulateDeposit(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = str(fd, 'depositId');
+    if (!id) return fail('depositId obrigatório');
+    await api.post(`/v1/fiat/deposits/${id}/simulate`);
+    revalidatePath('/fiat');
+    return { ok: true, message: 'Pix/SPEI simulado.' };
+  });
+}
+
+export async function refreshDeposit(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = str(fd, 'depositId');
+    if (!id) return fail('depositId obrigatório');
+    await api.post(`/v1/fiat/deposits/${id}/refresh`);
+    revalidatePath('/fiat');
+    return { ok: true, message: 'Status atualizado.' };
+  });
+}
+
+export async function initiateWithdrawal(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const amountCents = intOrNull(fd, 'amountCents');
+    if (!amountCents || amountCents <= 0) return fail('amountCents deve ser positivo');
+    await api.post('/v1/fiat/withdrawals', {
+      asset: str(fd, 'asset') || 'USDC',
+      assetIdentifier: str(fd, 'assetIdentifier'),
+      amountCents,
+      targetFiat: str(fd, 'targetFiat') || 'BRL',
+    });
+    revalidatePath('/fiat');
+    return { ok: true, message: 'Withdrawal iniciado (burn submetido).' };
+  });
+}
+
+export async function refreshWithdrawal(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = str(fd, 'withdrawalId');
+    if (!id) return fail('withdrawalId obrigatório');
+    await api.post(`/v1/fiat/withdrawals/${id}/refresh`);
+    revalidatePath('/fiat');
+    return { ok: true, message: 'Status atualizado.' };
+  });
+}

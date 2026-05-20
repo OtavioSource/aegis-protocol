@@ -28,11 +28,13 @@ import stellarPlugin from './plugins/stellar.js';
 import agentsRoute from './routes/agents.js';
 import approvalsRoute from './routes/approvals.js';
 import auditRoute from './routes/audit.js';
+import authRoute from './routes/auth.js';
 import companiesRoute from './routes/companies.js';
 import fiatRoute from './routes/fiat.js';
 import healthz from './routes/healthz.js';
 import policiesRoute from './routes/policies.js';
 import spendRequestsRoute from './routes/spend-requests.js';
+import treasuryRoute from './routes/treasury.js';
 import vendorsRoute from './routes/vendors.js';
 
 void jsonSchemaTransform; // re-exportado para uso futuro com swagger
@@ -67,7 +69,9 @@ async function main(): Promise<void> {
 
   // Rotas
   await app.register(healthz);
+  await app.register(authRoute);
   await app.register(companiesRoute);
+  await app.register(treasuryRoute);
   await app.register(agentsRoute);
   await app.register(policiesRoute);
   await app.register(vendorsRoute);
