@@ -28,6 +28,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 
 import { NotFoundError } from '../lib/errors.js';
+import { emitSorobanAuditEvent } from './soroban-audit.js';
 
 export interface ExecutePaymentInput {
   app: FastifyInstance;
@@ -113,7 +114,7 @@ export async function executeSpendRequestPayment(
     });
 
     // 4a. Sucesso — UPDATE EXECUTED + AuditEvent atomicamente
-    await prisma.$transaction([
+    const [, executedAuditEvent] = await prisma.$transaction([
       prisma.spendRequest.update({
         where: { id: sr.id },
         data: {
@@ -142,6 +143,25 @@ export async function executeSpendRequestPayment(
       }),
     ]);
 
+    // Fire-and-forget: emite o registro de decisão no contrato Soroban.
+    emitSorobanAuditEvent({
+      prisma,
+      log: app.log,
+      spendRequestId: sr.id,
+      companyId: sr.companyId,
+      agentId: sr.agentId,
+      vendorId: sr.vendor.id,
+      amountCents: sr.amountCents,
+      asset: sr.asset,
+      policyId: sr.policyId,
+      policyVersion:
+        (sr.policySnapshot as { version?: number } | null)?.version ?? 1,
+      auditEventId: executedAuditEvent.id,
+      decision: 'Executed',
+      reason: 'payment executed on-chain',
+      timestampMs: Date.now(),
+    });
+
     app.log.info(
       { spendRequestId: sr.id, txHash: result.txHash, ledger: result.ledger },
       'payment executed on-chain',
@@ -156,13 +176,23 @@ export async function executeSpendRequestPayment(
 async function markFailed(
   prisma: PrismaClient,
   app: FastifyInstance,
-  sr: Pick<SpendRequest, 'id' | 'companyId' | 'amountCents' | 'asset'>,
+  sr: Pick<
+    SpendRequest,
+    | 'id'
+    | 'companyId'
+    | 'amountCents'
+    | 'asset'
+    | 'agentId'
+    | 'vendorId'
+    | 'policyId'
+    | 'policySnapshot'
+  >,
   reason: string,
 ): Promise<ExecutePaymentOutput> {
   // Trunca razão (PostgreSQL text é unlimited, mas mantém log limpo)
   const truncated = reason.length > 1_000 ? reason.slice(0, 1_000) + '…' : reason;
 
-  await prisma.$transaction([
+  const [, failedAuditEvent] = await prisma.$transaction([
     prisma.spendRequest.update({
       where: { id: sr.id },
       data: {
@@ -184,6 +214,25 @@ async function markFailed(
       },
     }),
   ]);
+
+  // Fire-and-forget: emite o registro de decisão no contrato Soroban.
+  emitSorobanAuditEvent({
+    prisma,
+    log: app.log,
+    spendRequestId: sr.id,
+    companyId: sr.companyId,
+    agentId: sr.agentId,
+    vendorId: sr.vendorId,
+    amountCents: sr.amountCents,
+    asset: sr.asset,
+    policyId: sr.policyId,
+    policyVersion:
+      (sr.policySnapshot as { version?: number } | null)?.version ?? 1,
+    auditEventId: failedAuditEvent.id,
+    decision: 'ExecutionFailed',
+    reason: truncated,
+    timestampMs: Date.now(),
+  });
 
   app.log.warn({ spendRequestId: sr.id, reason: truncated }, 'payment execution failed');
   return { status: 'failed', failureReason: truncated };

@@ -28,5 +28,6 @@ export * from './etherfuse/index.js';
 export * from './sponsoring.js';
 export * from './payment.js';
 export * from './adapter.js';
+export * from './soroban-audit.js';
 
 export const STELLAR_PACKAGE_VERSION = '0.0.1';

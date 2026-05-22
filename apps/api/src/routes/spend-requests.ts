@@ -25,6 +25,7 @@ import { env } from '../env.js';
 import { NotFoundError, PolicyRejectedError } from '../lib/errors.js';
 import { extractIdempotencyKey } from '../lib/idempotency.js';
 import { executeSpendRequestPayment } from '../services/payment-executor.js';
+import { emitSorobanAuditEvent } from '../services/soroban-audit.js';
 import {
   createSpendRequest,
   serializeSpendRequest,
@@ -54,6 +55,24 @@ const spendRequestsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     // Status code mapping para REJECTED — RFC 7807 422
     if (spendRequest.decision === DecisionType.REJECTED) {
+      // Fire-and-forget: emite o registro de decisão no contrato Soroban.
+      emitSorobanAuditEvent({
+        prisma: app.prisma,
+        log: app.log,
+        spendRequestId: spendRequest.id,
+        companyId: spendRequest.companyId,
+        agentId: spendRequest.agentId,
+        vendorId: spendRequest.vendorId,
+        amountCents: spendRequest.amountCents,
+        asset: spendRequest.asset,
+        policyId: spendRequest.policyId,
+        policyVersion:
+          (spendRequest.policySnapshot as { version?: number } | null)
+            ?.version ?? 1,
+        decision: 'Rejected',
+        reason: spendRequest.decisionReason ?? 'policy rejected',
+        timestampMs: spendRequest.createdAt.getTime(),
+      });
       throw new PolicyRejectedError(
         spendRequest.decisionReason ?? 'rejected by policy',
         (spendRequest.metadata as Record<string, string>).ruleHit as never,

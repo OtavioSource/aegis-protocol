@@ -1,0 +1,23 @@
+{
+  "name": "vendor-mock",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Mock vendor HTTP 402 para demo Aegis",
+  "scripts": {
+    "start": "dotenv -e .env.local -- tsx src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf .turbo"
+  },
+  "dependencies": {
+    "fastify": "^4.28.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "dotenv-cli": "^8.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
