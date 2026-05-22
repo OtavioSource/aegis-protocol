@@ -139,7 +139,9 @@ export async function invokeRecordDecision(
   companyId: string,
   record: RecordDecisionParams,
 ): Promise<RecordDecisionResult> {
-  const server = new rpc.Server(config.sorobanRpcUrl, { allowHttp: true });
+  const server = new rpc.Server(config.sorobanRpcUrl, {
+    allowHttp: config.sorobanRpcUrl.startsWith('http://'),
+  });
   const contract = new Contract(config.contractId);
   const args = buildRecordDecisionArgs(companyId, record);
 
@@ -149,7 +151,7 @@ export async function invokeRecordDecision(
     networkPassphrase: config.networkPassphrase,
   })
     .addOperation(contract.call('record_decision', ...args))
-    .setTimeout(30)
+    .setTimeout(60)
     .build();
 
   const simResult = await server.simulateTransaction(tx);
@@ -168,7 +170,7 @@ export async function invokeRecordDecision(
   }
 
   const txHash = sendResult.hash;
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 50; i++) {
     await new Promise((r) => setTimeout(r, 1000));
     const statusResult = await server.getTransaction(txHash);
     if (statusResult.status === rpc.Api.GetTransactionStatus.SUCCESS) {

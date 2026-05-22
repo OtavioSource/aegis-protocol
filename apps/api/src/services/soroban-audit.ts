@@ -31,6 +31,8 @@ export interface EmitSorobanEventInput {
   decision: SorobanDecision;
   reason: string;
   timestampMs: number;
+  /** When provided, updates this specific AuditEvent instead of findFirst. */
+  auditEventId?: string;
 }
 
 /** Call without await — fire and forget. */
@@ -69,14 +71,16 @@ export function emitSorobanAuditEvent(input: EmitSorobanEventInput): void {
         },
       );
 
-      // Update the most-recent AuditEvent for this SpendRequest with the txHash
-      const auditEvent = await input.prisma.auditEvent.findFirst({
-        where: { spendRequestId: input.spendRequestId },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (auditEvent) {
+      const auditEventId = input.auditEventId ?? (
+        await input.prisma.auditEvent.findFirst({
+          where: { spendRequestId: input.spendRequestId },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        })
+      )?.id;
+      if (auditEventId) {
         await input.prisma.auditEvent.update({
-          where: { id: auditEvent.id },
+          where: { id: auditEventId },
           data: { sorobanTxHash: result.txHash, sorobanEmittedAt: new Date() },
         });
       }

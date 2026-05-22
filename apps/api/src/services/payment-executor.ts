@@ -114,7 +114,7 @@ export async function executeSpendRequestPayment(
     });
 
     // 4a. Sucesso — UPDATE EXECUTED + AuditEvent atomicamente
-    await prisma.$transaction([
+    const [, executedAuditEvent] = await prisma.$transaction([
       prisma.spendRequest.update({
         where: { id: sr.id },
         data: {
@@ -156,6 +156,7 @@ export async function executeSpendRequestPayment(
       policyId: sr.policyId,
       policyVersion:
         (sr.policySnapshot as { version?: number } | null)?.version ?? 1,
+      auditEventId: executedAuditEvent.id,
       decision: 'Executed',
       reason: 'payment executed on-chain',
       timestampMs: Date.now(),
@@ -191,7 +192,7 @@ async function markFailed(
   // Trunca razão (PostgreSQL text é unlimited, mas mantém log limpo)
   const truncated = reason.length > 1_000 ? reason.slice(0, 1_000) + '…' : reason;
 
-  await prisma.$transaction([
+  const [, failedAuditEvent] = await prisma.$transaction([
     prisma.spendRequest.update({
       where: { id: sr.id },
       data: {
@@ -227,6 +228,7 @@ async function markFailed(
     policyId: sr.policyId,
     policyVersion:
       (sr.policySnapshot as { version?: number } | null)?.version ?? 1,
+    auditEventId: failedAuditEvent.id,
     decision: 'ExecutionFailed',
     reason: truncated,
     timestampMs: Date.now(),
