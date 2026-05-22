@@ -1,37 +1,151 @@
 #![no_std]
-//! Aegis Audit — Soroban contract that records each governance decision as an on-chain event.
-//!
-//! Esse é um stub mínimo do scaffolding (iteração 1). A implementação completa,
-//! incluindo `record_decision`, `initialize`, `set_admin`, e o struct `DecisionRecord`
-//! com topics indexados por `companyId`, será adicionada na iteração 11 do roadmap.
-//!
-//! Design completo em [docs/08-soroban-audit.md].
+use soroban_sdk::{
+    contract, contractimpl, contracttype, Address, BytesN, Env, Symbol,
+};
 
-use soroban_sdk::{contract, contractimpl, symbol_short, Env, Symbol};
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Decision {
+    Approved,
+    RequiresApproval,
+    Rejected,
+    ApprovedByHuman,
+    RejectedByHuman,
+    Expired,
+    ExecutionFailed,
+    Executed,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DecisionRecord {
+    pub spend_request_id: BytesN<16>,
+    pub agent_id: BytesN<16>,
+    pub vendor_id: BytesN<16>,
+    pub amount_cents: i128,
+    pub asset_code: Symbol,
+    pub decision: Decision,
+    pub reason_hash: BytesN<32>,
+    pub timestamp: u64,
+    pub policy_id: BytesN<16>,
+    pub policy_version: u32,
+}
+
+#[contracttype]
+enum DataKey {
+    Admin,
+}
 
 #[contract]
 pub struct AegisAudit;
 
 #[contractimpl]
 impl AegisAudit {
-    /// Stub de saúde — apenas confirma que o contrato compila e pode ser invocado.
-    /// Substituído por `initialize` + `record_decision` na iteração 11.
-    pub fn ping(_env: Env) -> Symbol {
-        symbol_short!("pong")
+    pub fn initialize(env: Env, admin: Address) {
+        if env.storage().instance().has(&DataKey::Admin) {
+            panic!("already initialized");
+        }
+        env.storage().instance().set(&DataKey::Admin, &admin);
+    }
+
+    pub fn record_decision(env: Env, company_id: BytesN<16>, record: DecisionRecord) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        let topics = (
+            Symbol::new(&env, "aegis"),
+            Symbol::new(&env, "decision"),
+            company_id,
+        );
+        env.events().publish(topics, record);
+    }
+
+    pub fn get_admin(env: Env) -> Address {
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized")
+    }
+
+    pub fn set_admin(env: Env, new_admin: Address) {
+        let current: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        current.require_auth();
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::Env;
+    use soroban_sdk::{
+        testutils::{Address as _, Events as _},
+        Address, BytesN, Env, Symbol,
+    };
+
+    fn setup() -> (Env, AegisAuditClient<'static>, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, AegisAudit);
+        let client = AegisAuditClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+        (env, client, admin)
+    }
 
     #[test]
-    fn ping_returns_pong() {
+    fn initialize_sets_admin() {
         let env = Env::default();
         let contract_id = env.register_contract(None, AegisAudit);
         let client = AegisAuditClient::new(&env, &contract_id);
-        let result = client.ping();
-        assert_eq!(result, symbol_short!("pong"));
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+        assert_eq!(client.get_admin(), admin);
+    }
+
+    #[test]
+    #[should_panic(expected = "already initialized")]
+    fn initialize_twice_panics() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AegisAudit);
+        let client = AegisAuditClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+        client.initialize(&admin);
+    }
+
+    #[test]
+    fn record_decision_emits_event() {
+        let (env, client, _admin) = setup();
+        let company_id = BytesN::from_array(&env, &[1u8; 16]);
+        let record = DecisionRecord {
+            spend_request_id: BytesN::from_array(&env, &[2u8; 16]),
+            agent_id: BytesN::from_array(&env, &[3u8; 16]),
+            vendor_id: BytesN::from_array(&env, &[4u8; 16]),
+            amount_cents: 500_i128,
+            asset_code: Symbol::new(&env, "USDC"),
+            decision: Decision::Approved,
+            reason_hash: BytesN::from_array(&env, &[5u8; 32]),
+            timestamp: 1_700_000_000_u64,
+            policy_id: BytesN::from_array(&env, &[6u8; 16]),
+            policy_version: 1_u32,
+        };
+        client.record_decision(&company_id, &record);
+        let events = env.events().all();
+        assert_eq!(events.len(), 1);
+    }
+
+    #[test]
+    fn set_admin_transfers_role() {
+        let (env, client, _admin) = setup();
+        let new_admin = Address::generate(&env);
+        client.set_admin(&new_admin);
+        assert_eq!(client.get_admin(), new_admin);
     }
 }
