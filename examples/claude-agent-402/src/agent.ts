@@ -84,24 +84,28 @@ interface CallVendorInput { payment_proof?: string }
 interface PayWithAegisInput { amount_cents: number; asset: string; memo?: string }
 
 async function handleCallVendorApi(input: CallVendorInput): Promise<string> {
-  const headers: Record<string, string> = {};
-  if (input.payment_proof) {
-    headers['X-Payment-Proof'] = input.payment_proof;
+  try {
+    const headers: Record<string, string> = {};
+    if (input.payment_proof) {
+      headers['X-Payment-Proof'] = input.payment_proof;
+    }
+
+    const response = await fetch(`${VENDOR_MOCK_URL}/resource`, { method: 'GET', headers });
+
+    if (response.status === 402) {
+      const body = await response.json() as Record<string, unknown>;
+      return JSON.stringify({ status: 402, message: 'Payment required', invoice: body });
+    }
+
+    if (response.ok) {
+      const body = await response.json() as Record<string, unknown>;
+      return JSON.stringify({ status: 200, data: body });
+    }
+
+    return JSON.stringify({ status: response.status, error: 'Unexpected response from vendor' });
+  } catch (err) {
+    return JSON.stringify({ error: `Network error calling vendor: ${String(err)}` });
   }
-
-  const response = await fetch(`${VENDOR_MOCK_URL}/resource`, { method: 'GET', headers });
-
-  if (response.status === 402) {
-    const body = await response.json() as Record<string, unknown>;
-    return JSON.stringify({ status: 402, message: 'Payment required', invoice: body });
-  }
-
-  if (response.ok) {
-    const body = await response.json() as Record<string, unknown>;
-    return JSON.stringify({ status: 200, data: body });
-  }
-
-  return JSON.stringify({ status: response.status, error: 'Unexpected response from vendor' });
 }
 
 async function handlePayWithAegis(input: PayWithAegisInput): Promise<string> {
@@ -127,8 +131,12 @@ async function handlePayWithAegis(input: PayWithAegisInput): Promise<string> {
       return JSON.stringify({
         status: 'REQUIRES_APPROVAL',
         requestId: result.id,
-        message: 'Payment pending human approval in Aegis dashboard',
+        message: 'Payment requires human approval — stop and instruct user to approve in Aegis dashboard before retrying.',
       });
+    }
+
+    if (result.status === 'EXECUTION_FAILED') {
+      return JSON.stringify({ status: 'EXECUTION_FAILED', failureReason: result.failureReason, message: 'Payment execution failed — do not retry.' });
     }
 
     return JSON.stringify({ status: result.status, decision: result.decision });
@@ -221,6 +229,9 @@ async function runAgent(): Promise<void> {
       }
 
       messages.push({ role: 'user', content: toolResults });
+    } else {
+      console.error(`❌ Unexpected stop_reason: ${response.stop_reason} — abortando`);
+      break;
     }
   }
 
