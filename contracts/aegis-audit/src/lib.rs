@@ -122,6 +122,8 @@ mod test {
 
     #[test]
     fn record_decision_emits_event() {
+        use soroban_sdk::TryIntoVal;
+
         let (env, client, _admin) = setup();
         let company_id = BytesN::from_array(&env, &[1u8; 16]);
         let record = DecisionRecord {
@@ -137,8 +139,25 @@ mod test {
             policy_version: 1_u32,
         };
         client.record_decision(&company_id, &record);
+
         let events = env.events().all();
         assert_eq!(events.len(), 1);
+
+        // events() returns Vec<(Address, Vec<Val>, Val)> — (contract_id, topics, data)
+        let (_contract_addr, topics, data) = events.first().unwrap();
+
+        // Verify topics: ("aegis", "decision", company_id)
+        let topic0: Symbol = topics.get(0).unwrap().try_into_val(&env).unwrap();
+        let topic1: Symbol = topics.get(1).unwrap().try_into_val(&env).unwrap();
+        let topic2: BytesN<16> = topics.get(2).unwrap().try_into_val(&env).unwrap();
+        assert_eq!(topic0, Symbol::new(&env, "aegis"));
+        assert_eq!(topic1, Symbol::new(&env, "decision"));
+        assert_eq!(topic2, company_id);
+
+        // Verify data round-trips to DecisionRecord
+        let emitted: DecisionRecord = data.try_into_val(&env).unwrap();
+        assert_eq!(emitted.decision, Decision::Approved);
+        assert_eq!(emitted.amount_cents, 500_i128);
     }
 
     #[test]
