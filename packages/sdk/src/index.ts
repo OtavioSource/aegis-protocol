@@ -2,12 +2,13 @@
  * @aegis/sdk — cliente TypeScript para agentes consumirem a Aegis API.
  *
  * API principal:
- * - `AegisClient`  — classe de entrada (pay, getSpendRequest, listSpendRequests)
- * - `parseHttp402` — extrai Invoice de Response 402
- * - `payInvoice`   — paga Invoice via vendorId cadastrado
+ * - `AegisClient`           — classe de entrada (pay, getSpendRequest, listSpendRequests)
+ * - `parsePaymentRequired`  — extrai PaymentRequirements[] do header X-PAYMENT-REQUIRED
+ * - `buildPaymentSignature` — constrói o valor do header X-PAYMENT após pagamento
+ * - `payX402`               — orquestra parse → pay → assinatura
+ * - `X402Error`             — erro tipado do fluxo x402
  *
  * Compatível com Node 22+, Bun, Deno, Cloudflare Workers e edge runtimes.
- * Zero dependencies (usa fetch global).
  *
  * Ver `docs/07-api-contract.md §5` para spec do contrato e exemplos.
  */
@@ -28,14 +29,18 @@ export {
   UnauthorizedError,
   ValidationError,
 } from './errors.js';
-export { parseHttp402, payInvoice } from './http-402.js';
+export {
+  buildPaymentSignature,
+  parsePaymentRequired,
+  payX402,
+  X402Error,
+} from './http-402.js';
+export type { PaymentPayload, PaymentRequired, PaymentRequirements } from './http-402.js';
 export type {
   AegisClientOptions,
-  Http402Invoice,
   ListResult,
   ListSpendRequestsQuery,
   PayInput,
-  PayInvoiceOptions,
   PayOptions,
   PayResult,
 } from './types.js';
