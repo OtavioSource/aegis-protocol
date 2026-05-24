@@ -1,10 +1,10 @@
 /**
- * Claude tool_use agent demo — HTTP 402 end-to-end.
+ * Claude tool_use agent demo — HTTP 402 end-to-end (x402 protocol).
  *
  * Fluxo demonstrado:
- *  1. Claude chama call_vendor_api → vendor retorna 402 com invoice
- *  2. Claude chama pay_with_aegis → Aegis paga USDC on-chain → retorna txHash
- *  3. Claude chama call_vendor_api com X-Payment-Proof → vendor libera recurso
+ *  1. Claude chama call_vendor_api → vendor retorna 402 com X-PAYMENT-REQUIRED header
+ *  2. Claude chama pay_with_aegis com paymentRequiredHeader → Aegis paga → retorna paymentSignature
+ *  3. Claude chama call_vendor_api com payment_signature → vendor verifica via facilitador → 200
  *  4. Claude retorna o recurso ao usuário
  *
  * Pré-requisitos:
@@ -15,7 +15,7 @@
 
 import 'dotenv/config';
 import Anthropic from '@anthropic-ai/sdk';
-import { AegisClient } from '@aegis/sdk';
+import { AegisClient, payX402, X402Error } from '@aegis/sdk';
 
 // ===== Config =====
 
@@ -39,14 +39,14 @@ const TOOLS: Anthropic.Tool[] = [
     name: 'call_vendor_api',
     description:
       'Faz uma requisição HTTP GET ao vendor para obter dados de mercado. ' +
-      'Se o vendor retornar 402, retorna o invoice de pagamento. ' +
-      'Se payment_proof for fornecido, envia no header X-Payment-Proof.',
+      'Se o vendor retornar 402, retorna o header X-PAYMENT-REQUIRED. ' +
+      'Se payment_signature for fornecido, envia no header X-PAYMENT para retry.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        payment_proof: {
+        payment_signature: {
           type: 'string',
-          description: 'txHash de pagamento (64 chars hex). Omitir na primeira chamada.',
+          description: 'Valor do header X-PAYMENT (base64) retornado por pay_with_aegis. Omitir na primeira chamada.',
         },
       },
       required: [],
@@ -55,46 +55,44 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'pay_with_aegis',
     description:
-      'Paga uma invoice HTTP 402 usando o Aegis Protocol. ' +
-      'Retorna txHash quando pagamento USDC é executado on-chain.',
+      'Paga um payment request x402 usando o Aegis Protocol. ' +
+      'Recebe o valor raw do header X-PAYMENT-REQUIRED (base64). ' +
+      'Retorna paymentSignature para usar no retry via X-PAYMENT.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        amount_cents: {
-          type: 'number',
-          description: 'Valor em centavos (ex: 5 = $0.05 USDC)',
-        },
-        asset: {
+        paymentRequiredHeader: {
           type: 'string',
-          description: 'Asset code (ex: USDC)',
-        },
-        memo: {
-          type: 'string',
-          description: 'Memo do invoice (ex: invoice-abc123)',
+          description: 'Valor raw do header X-PAYMENT-REQUIRED retornado pelo vendor (base64 encoded).',
         },
       },
-      required: ['amount_cents', 'asset'],
+      required: ['paymentRequiredHeader'],
     },
   },
 ];
 
 // ===== Tool handlers =====
 
-interface CallVendorInput { payment_proof?: string }
-interface PayWithAegisInput { amount_cents: number; asset: string; memo?: string }
+interface CallVendorInput { payment_signature?: string }
+interface PayWithAegisInput { paymentRequiredHeader: string }
 
 async function handleCallVendorApi(input: CallVendorInput): Promise<string> {
   try {
     const headers: Record<string, string> = {};
-    if (input.payment_proof) {
-      headers['X-Payment-Proof'] = input.payment_proof;
+    if (input.payment_signature) {
+      headers['X-PAYMENT'] = input.payment_signature;
     }
 
     const response = await fetch(`${VENDOR_MOCK_URL}/resource`, { method: 'GET', headers });
 
     if (response.status === 402) {
-      const body = await response.json() as Record<string, unknown>;
-      return JSON.stringify({ status: 402, message: 'Payment required', invoice: body });
+      const paymentRequiredHeader = response.headers.get('X-PAYMENT-REQUIRED');
+      const invalidReason = response.headers.get('X-PAYMENT-INVALID-REASON');
+      return JSON.stringify({
+        status: 402,
+        paymentRequiredHeader,
+        ...(invalidReason ? { invalidReason } : {}),
+      });
     }
 
     if (response.ok) {
@@ -110,37 +108,42 @@ async function handleCallVendorApi(input: CallVendorInput): Promise<string> {
 
 async function handlePayWithAegis(input: PayWithAegisInput): Promise<string> {
   try {
-    const result = await aegis.pay({
-      vendorId: AEGIS_VENDOR_ID!,
-      amountCents: input.amount_cents,
-      asset: input.asset,
-      actionType: 'api-call',
-      reason: `HTTP 402 invoice: ${input.memo ?? 'no memo'} — ${input.amount_cents} cents ${input.asset}`,
+    // Construct a fake 402 Response with the header so payX402 can parse it
+    const fakeResponse = new Response(null, {
+      status: 402,
+      headers: { 'X-PAYMENT-REQUIRED': input.paymentRequiredHeader },
     });
 
-    if (result.status === 'EXECUTED') {
-      return JSON.stringify({
-        status: 'EXECUTED',
-        txHash: result.txHash,
-        ledger: result.ledger,
-        stellarExpertUrl: result.stellarExpertUrl,
-      });
-    }
+    const result = await payX402(aegis, fakeResponse, {
+      vendorId: AEGIS_VENDOR_ID!,
+      actionType: 'api-call',
+      reason: 'HTTP 402 x402 payment via claude-agent-402',
+    });
 
-    if (result.status === 'REQUIRES_APPROVAL') {
-      return JSON.stringify({
-        status: 'REQUIRES_APPROVAL',
-        requestId: result.id,
-        message: 'Payment requires human approval — stop and instruct user to approve in Aegis dashboard before retrying.',
-      });
-    }
-
-    if (result.status === 'EXECUTION_FAILED') {
-      return JSON.stringify({ status: 'EXECUTION_FAILED', failureReason: result.failureReason, message: 'Payment execution failed — do not retry.' });
-    }
-
-    return JSON.stringify({ status: result.status, decision: result.decision });
+    return JSON.stringify({
+      status: 'EXECUTED',
+      paymentSignature: result.paymentSignature,
+      txHash: result.txHash,
+      spendRequestId: result.spendRequestId,
+    });
   } catch (err) {
+    if (err instanceof X402Error) {
+      if (err.code === 'requires_approval') {
+        return JSON.stringify({
+          status: 'REQUIRES_APPROVAL',
+          requestId: (err.detail as any)?.requestId,
+          message: 'Payment requires human approval. Stop and instruct the user to approve in the Aegis dashboard before retrying.',
+        });
+      }
+      if (err.code === 'payment_execution_failed') {
+        return JSON.stringify({
+          status: 'EXECUTION_FAILED',
+          message: 'Payment execution failed — do not retry.',
+          detail: err.detail,
+        });
+      }
+      return JSON.stringify({ status: 'ERROR', code: err.code, detail: err.detail });
+    }
     return JSON.stringify({ error: String(err) });
   }
 }
@@ -172,8 +175,9 @@ async function runAgent(): Promise<void> {
       role: 'user',
       content:
         'Preciso dos dados de mercado atuais do vendor. ' +
-        'Se o vendor pedir pagamento (HTTP 402), use a ferramenta pay_with_aegis para pagar automaticamente ' +
-        'e depois tente novamente com a prova de pagamento. ' +
+        'Se o vendor retornar 402, use pay_with_aegis passando o paymentRequiredHeader retornado. ' +
+        'Depois faça retry com o payment_signature retornado no header X-PAYMENT. ' +
+        'Se o pagamento precisar de aprovação humana, pare e informe o usuário. ' +
         'Reporte o resultado final.',
     },
   ];
