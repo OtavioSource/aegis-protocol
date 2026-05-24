@@ -73,9 +73,8 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          x402Version: 1,
-          paymentPayload,
-          paymentRequirements: requirements[0],
+          payload: paymentPayload,
+          requirements: requirements[0],
         }),
       });
       if (!res.ok) {
