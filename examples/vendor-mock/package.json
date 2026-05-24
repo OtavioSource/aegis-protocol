@@ -11,6 +11,7 @@
     "clean": "rm -rf .turbo"
   },
   "dependencies": {
+    "@x402/core": "^2.13.0",
     "fastify": "^4.28.0"
   },
   "devDependencies": {
