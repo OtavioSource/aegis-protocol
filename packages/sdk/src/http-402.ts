@@ -39,8 +39,10 @@ export function parsePaymentRequired(response: Response): PaymentRequirements[] 
   if (!header) throw new X402Error('missing_payment_required_header');
   try {
     const paymentRequired: PaymentRequired = decodePaymentRequiredHeader(header);
+    if (!paymentRequired?.accepts) throw new Error('no accepts field');
     return paymentRequired.accepts;
-  } catch {
+  } catch (err) {
+    if (err instanceof X402Error) throw err;
     throw new X402Error('invalid_payment_required_format');
   }
 }

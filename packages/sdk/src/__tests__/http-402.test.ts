@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { encodePaymentRequiredHeader } from '@x402/core/http';
 import type { PaymentRequired } from '@x402/core/types';
 
-import { buildPaymentSignature, parsePaymentRequired, X402Error } from '../http-402.js';
+import type { AegisClient } from '../client.js';
+import { buildPaymentSignature, parsePaymentRequired, payX402, X402Error } from '../http-402.js';
 
 // Helper to build a valid X-PAYMENT-REQUIRED header value
 function makePaymentRequiredHeader(overrides?: Partial<PaymentRequired>): string {
@@ -117,6 +118,77 @@ describe('parsePaymentRequired', () => {
       expect(e).toBeInstanceOf(X402Error);
       expect((e as X402Error).code).toBe('invalid_payment_required_format');
     }
+  });
+});
+
+// Minimal mock AegisClient — only the `pay` method is needed by payX402
+function makeMockClient(payFn: AegisClient['pay']): AegisClient {
+  return { pay: payFn } as unknown as AegisClient;
+}
+
+const DEFAULT_PAY_OPTS = {
+  vendorId: 'vendor-1',
+  actionType: 'api-call',
+  reason: 'test',
+};
+
+describe('payX402', () => {
+  it('happy path: EXECUTED → returns paymentSignature, txHash, spendRequestId', async () => {
+    const mockPay = vi.fn().mockResolvedValue({
+      status: 'EXECUTED',
+      txHash: 'abc123',
+      id: 'sr-1',
+    });
+    const client = makeMockClient(mockPay);
+    const header = makePaymentRequiredHeader();
+    const response = makeResponse402(header);
+
+    const result = await payX402(client, response, DEFAULT_PAY_OPTS);
+
+    expect(result.txHash).toBe('abc123');
+    expect(result.spendRequestId).toBe('sr-1');
+    expect(typeof result.paymentSignature).toBe('string');
+    expect(result.paymentSignature.length).toBeGreaterThan(0);
+  });
+
+  it("REQUIRES_APPROVAL → throws X402Error with code 'requires_approval'", async () => {
+    const mockPay = vi.fn().mockResolvedValue({
+      status: 'REQUIRES_APPROVAL',
+      id: 'sr-2',
+    });
+    const client = makeMockClient(mockPay);
+    const header = makePaymentRequiredHeader();
+    const response = makeResponse402(header);
+
+    await expect(payX402(client, response, DEFAULT_PAY_OPTS)).rejects.toSatisfy(
+      (e: unknown) => e instanceof X402Error && e.code === 'requires_approval',
+    );
+  });
+
+  it("EXECUTION_FAILED → throws X402Error with code 'payment_execution_failed'", async () => {
+    const mockPay = vi.fn().mockResolvedValue({
+      status: 'EXECUTION_FAILED',
+      failureReason: 'insufficient_balance',
+      id: 'sr-3',
+    });
+    const client = makeMockClient(mockPay);
+    const header = makePaymentRequiredHeader();
+    const response = makeResponse402(header);
+
+    await expect(payX402(client, response, DEFAULT_PAY_OPTS)).rejects.toSatisfy(
+      (e: unknown) => e instanceof X402Error && e.code === 'payment_execution_failed',
+    );
+  });
+
+  it("missing X-PAYMENT-REQUIRED header → throws X402Error with code 'missing_payment_required_header'", async () => {
+    const mockPay = vi.fn();
+    const client = makeMockClient(mockPay);
+    const response = makeResponse402(null);
+
+    await expect(payX402(client, response, DEFAULT_PAY_OPTS)).rejects.toSatisfy(
+      (e: unknown) => e instanceof X402Error && e.code === 'missing_payment_required_header',
+    );
+    expect(mockPay).not.toHaveBeenCalled();
   });
 });
 
