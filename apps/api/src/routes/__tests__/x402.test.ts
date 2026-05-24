@@ -177,6 +177,44 @@ describe('POST /v1/x402/verify', () => {
     expect(calledPayload).toMatchObject({ x402Version: 2, scheme: 'exact' });
     expect(calledRequirements).toMatchObject({ payTo: mockRequirements.payTo });
   });
+
+  // Fix 1 — TREASURY_SECRET missing
+  //
+  // NOTE: The `../../env.js` module is fully mocked by vi.mock at the top of this
+  // file, so manipulating process.env.TREASURY_SECRET has NO effect on the value
+  // seen by getFacilitator() — it always reads from the mocked `env` object.
+  // To simulate a missing secret we must override the mocked env object directly.
+  it('returns 400 with verification_failed when TREASURY_SECRET is missing', async () => {
+    // Temporarily remove TREASURY_SECRET from the mocked env object
+    const envMod = await import('../../env.js');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mutableEnv = (envMod as any).env as Record<string, string | undefined>;
+    const original = mutableEnv.TREASURY_SECRET;
+    delete mutableEnv.TREASURY_SECRET;
+
+    try {
+      // Build a fresh app instance so facilitator is not cached from a prior test
+      const app = await buildTestApp();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/x402/verify',
+        payload: { payload: mockPayload, requirements: mockRequirements },
+      });
+      // getFacilitator() throws → caught by the route → 400 verification_failed
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).error).toBe('verification_failed');
+    } finally {
+      // Restore original value so subsequent tests are not affected
+      mutableEnv.TREASURY_SECRET = original;
+    }
+  });
+
+  // Fix 3 — SOROBAN_RPC_URL validation placeholder
+  // getFacilitator() does not currently validate SOROBAN_RPC_URL explicitly; it
+  // passes whatever value (including undefined) to ExactStellarScheme which would
+  // only fail at actual RPC call time.  A full test would require a more granular
+  // mock or an integration environment — tracked here as a reminder.
+  it.todo('returns error when SOROBAN_RPC_URL is empty');
 });
 
 // ---------------------------------------------------------------------------
