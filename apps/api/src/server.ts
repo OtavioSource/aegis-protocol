@@ -32,6 +32,7 @@ import authRoute from './routes/auth.js';
 import companiesRoute from './routes/companies.js';
 import fiatRoute from './routes/fiat.js';
 import healthz from './routes/healthz.js';
+import x402Route from './routes/x402.js';
 import policiesRoute from './routes/policies.js';
 import spendRequestsRoute from './routes/spend-requests.js';
 import treasuryRoute from './routes/treasury.js';
@@ -69,6 +70,7 @@ async function main(): Promise<void> {
 
   // Rotas
   await app.register(healthz);
+  await app.register(x402Route);
   await app.register(authRoute);
   await app.register(companiesRoute);
   await app.register(treasuryRoute);
