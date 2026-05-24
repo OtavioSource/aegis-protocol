@@ -54,11 +54,16 @@ export function buildPaymentSignature(
   txHash: string,
   requirement: PaymentRequirements,
 ): string {
-  const payload: PaymentPayload = {
-    x402Version: 1,
+  // x402 PaymentPayload exige `scheme` e `network` no top level (mesmo que
+  // também estejam dentro de `accepted`). O facilitator usa o top-level para
+  // rotear ao scheme handler correto.
+  const payload = {
+    x402Version: 2,
+    scheme: requirement.scheme,
+    network: requirement.network,
     accepted: requirement,
     payload: { transaction: txHash },
-  };
+  } as PaymentPayload;
   return encodePaymentSignatureHeader(payload);
 }
 
@@ -87,16 +92,23 @@ export async function payX402(
   const amountFloat = parseFloat(req.amount);
   const amountCents = Math.round(amountFloat * 100);
 
+  // The Aegis API expects `asset` as the asset CODE (uppercase, ≤12 chars),
+  // not the full x402 "CODE:ISSUER" identifier — extract just the code.
+  const assetCode = req.asset.includes(':')
+    ? (req.asset.split(':')[0] ?? 'USDC')
+    : req.asset;
+
   const result = await client.pay(
     {
       vendorId: opts.vendorId,
       actionType: opts.actionType,
       reason: opts.reason,
       amountCents,
-      asset: req.asset,
+      asset: assetCode,
       metadata: {
         x402Network: req.network,
         x402PayTo: req.payTo,
+        x402AssetIdentifier: req.asset,
       },
     },
     { idempotencyKey: opts.idempotencyKey },

@@ -54,6 +54,59 @@ const BodySchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Aegis "pay-first" verification helper
+// ---------------------------------------------------------------------------
+// O Aegis liquida o pagamento on-chain ANTES de devolver a prova ao agente
+// (modelo "pay-first, prove later"). O X-PAYMENT contém apenas o txHash de
+// uma tx já submetida — o `@x402/stellar` facilitator canônico não consegue
+// validar isso porque espera uma tx ainda não submetida. Aqui, verificamos
+// direto no Horizon que o pagamento on-chain bate com os requirements.
+
+async function verifyOnChainPayment(
+  horizonUrl: string,
+  txHash: string,
+  requirements: { asset: string; amount: string; payTo: string },
+): Promise<{ isValid: boolean; invalidReason?: string }> {
+  try {
+    const txRes = await fetch(`${horizonUrl}/transactions/${txHash}`);
+    if (!txRes.ok) return { isValid: false, invalidReason: 'transaction_not_found' };
+    const tx = (await txRes.json()) as { successful?: boolean };
+    if (!tx.successful) return { isValid: false, invalidReason: 'transaction_failed' };
+
+    const opsRes = await fetch(`${horizonUrl}/transactions/${txHash}/operations`);
+    if (!opsRes.ok) return { isValid: false, invalidReason: 'operations_not_found' };
+    const opsData = (await opsRes.json()) as {
+      _embedded?: { records?: Array<Record<string, unknown>> };
+    };
+    const ops = opsData._embedded?.records ?? [];
+
+    const [assetCode, assetIssuer] = requirements.asset.split(':');
+    const expectedStroops = Math.round(parseFloat(requirements.amount) * 1e7);
+
+    const op = ops.find((o) => {
+      if (o.type !== 'payment') return false;
+      if (o.to !== requirements.payTo) return false;
+      if (o.asset_code !== assetCode) return false;
+      if (o.asset_issuer !== assetIssuer) return false;
+      const actualStroops = Math.round(parseFloat((o.amount as string) ?? '0') * 1e7);
+      return actualStroops === expectedStroops;
+    });
+
+    if (!op) return { isValid: false, invalidReason: 'no_matching_payment_op' };
+    return { isValid: true };
+  } catch (err) {
+    return { isValid: false, invalidReason: `horizon_error: ${String(err)}` };
+  }
+}
+
+function extractAegisTxHash(payload: unknown): string | null {
+  const inner = (payload as { payload?: unknown })?.payload;
+  const tx = (inner as { transaction?: unknown })?.transaction;
+  if (typeof tx === 'string' && /^[a-f0-9]{64}$/i.test(tx)) return tx;
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
 
@@ -97,6 +150,19 @@ const x402Route: FastifyPluginAsync = async (app: FastifyInstance) => {
       return reply.code(400).send({ error: 'invalid_request', detail: String(err) });
     }
 
+    // Aegis "pay-first" path: payload carrega o txHash de uma tx já liquidada
+    // pelo próprio Aegis — verifica direto no Horizon.
+    const aegisTxHash = extractAegisTxHash(body.payload);
+    if (aegisTxHash) {
+      const result = await verifyOnChainPayment(env.STELLAR_HORIZON_URL, aegisTxHash, {
+        asset: body.requirements.asset,
+        amount: body.requirements.amount,
+        payTo: body.requirements.payTo,
+      });
+      return reply.send(result);
+    }
+
+    // Caminho canônico x402-stellar (cliente submete via facilitator.settle)
     try {
       const fac = getFacilitator();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

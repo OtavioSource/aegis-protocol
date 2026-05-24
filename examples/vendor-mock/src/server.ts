@@ -8,6 +8,10 @@ import type { Network, PaymentRequired, PaymentRequirements, PaymentPayload } fr
 interface ServerOptions {
   vendorWalletPublicKey: string;
   facilitatorUrl: string;
+  /** Asset Stellar no formato "CODE:ISSUER" — deve casar com o que a treasury Aegis paga. */
+  assetIdentifier: string;
+  /** Preço do recurso em centavos. Convertido para amount decimal no header x402. */
+  priceCents: number;
   logger?: boolean;
 }
 
@@ -18,9 +22,9 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     {
       scheme: 'exact',
       network: 'stellar:testnet' as Network,
-      amount: '0.005',
+      amount: (opts.priceCents / 100).toFixed(2),
       payTo: opts.vendorWalletPublicKey,
-      asset: 'USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+      asset: opts.assetIdentifier,
       maxTimeoutSeconds: 300,
       extra: {
         description: 'Market data',
@@ -31,7 +35,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   ];
 
   const paymentRequired: PaymentRequired = {
-    x402Version: 1,
+    x402Version: 2,
     resource: {
       url: '/resource',
       description: 'Market data',

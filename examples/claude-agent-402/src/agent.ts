@@ -13,7 +13,6 @@
  *  - .env.local com ANTHROPIC_API_KEY, AEGIS_API_KEY, AEGIS_VENDOR_ID
  */
 
-import 'dotenv/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { AegisClient, payX402, X402Error } from '@aegis/sdk';
 
