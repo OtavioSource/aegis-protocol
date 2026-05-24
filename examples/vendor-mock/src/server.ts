@@ -78,6 +78,9 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
           paymentRequirements: requirements[0],
         }),
       });
+      if (!res.ok) {
+        throw new Error(`facilitator error: ${res.status}`);
+      }
       verifyResponse = (await res.json()) as { isValid: boolean; invalidReason?: string };
     } catch {
       return reply.code(503).send({ error: 'facilitator_unavailable' });

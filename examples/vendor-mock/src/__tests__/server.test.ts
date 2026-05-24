@@ -24,6 +24,7 @@ describe('vendor-mock server (x402)', () => {
 
   it('GET /resource with valid X-PAYMENT, facilitator returns isValid:true → 200', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
       json: async () => ({ isValid: true }),
     }));
 
@@ -39,6 +40,7 @@ describe('vendor-mock server (x402)', () => {
 
   it('GET /resource with X-PAYMENT, facilitator returns isValid:false → 402 + X-PAYMENT-INVALID-REASON', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
       json: async () => ({ isValid: false, invalidReason: 'transaction_not_found' }),
     }));
 
@@ -62,6 +64,25 @@ describe('vendor-mock server (x402)', () => {
     });
     expect(response.statusCode).toBe(503);
     expect(response.json()).toMatchObject({ error: 'facilitator_unavailable' });
+  });
+
+  it('returns 503 when facilitator returns HTTP 500', async () => {
+    vi.stubGlobal('fetch', async () => ({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'internal server error' }),
+    }));
+    const app500 = buildServer({
+      vendorWalletPublicKey: VENDOR_WALLET,
+      facilitatorUrl: FACILITATOR_URL,
+    });
+    const res = await app500.inject({
+      method: 'GET',
+      url: '/resource',
+      headers: { 'x-payment': 'eyJ4NDAyVmVyc2lvbiI6MSwic2NoZW1lIjoiZXhhY3QiLCJuZXR3b3JrIjoic3RlbGxhci10ZXN0bmV0IiwicGF5bG9hZCI6eyJ0cmFuc2FjdGlvbiI6ImFiY2QifSwiYWNjZXB0ZWQiOnsic2NoZW1lIjoiZXhhY3QiLCJuZXR3b3JrIjoic3RlbGxhci10ZXN0bmV0IiwiYW1vdW50IjoiMC4wMDUiLCJyZXNvdXJjZSI6Ii9yZXNvdXJjZSIsInBheVRvIjoiR1ZFTkRPUiIsImFzc2V0IjoiVVNEQyIsIm1heFRpbWVvdXRTZWNvbmRzIjozMDAsImV4dHJhIjp7fX19' },
+    });
+    expect(res.statusCode).toBe(503);
+    await app500.close();
   });
 
   it('GET /healthz returns ok', async () => {
