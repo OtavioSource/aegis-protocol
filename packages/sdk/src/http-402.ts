@@ -109,9 +109,13 @@ export async function payX402(
     throw new X402Error('payment_execution_failed', { reason: result.failureReason });
   }
 
+  if (!result.txHash) {
+    throw new X402Error('payment_execution_failed', { reason: 'missing_txhash' });
+  }
+
   return {
-    paymentSignature: buildPaymentSignature(result.txHash!, req),
-    txHash: result.txHash!,
+    paymentSignature: buildPaymentSignature(result.txHash, req),
+    txHash: result.txHash,
     spendRequestId: result.id,
   };
 }

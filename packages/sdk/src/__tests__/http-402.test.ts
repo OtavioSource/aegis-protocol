@@ -180,6 +180,21 @@ describe('payX402', () => {
     );
   });
 
+  it("EXECUTED with txHash: null → throws X402Error with code 'payment_execution_failed'", async () => {
+    const mockPay = vi.fn().mockResolvedValue({
+      status: 'EXECUTED',
+      txHash: null,
+      id: 'sr-4',
+    });
+    const client = makeMockClient(mockPay);
+    const header = makePaymentRequiredHeader();
+    const response = makeResponse402(header);
+
+    await expect(payX402(client, response, DEFAULT_PAY_OPTS)).rejects.toSatisfy(
+      (e: unknown) => e instanceof X402Error && e.code === 'payment_execution_failed',
+    );
+  });
+
   it("missing X-PAYMENT-REQUIRED header → throws X402Error with code 'missing_payment_required_header'", async () => {
     const mockPay = vi.fn();
     const client = makeMockClient(mockPay);
