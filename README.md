@@ -10,34 +10,39 @@
 
 ## O problema
 
-Agentes de IA estão começando a pagar por coisas em produção — APIs LLM, scrapers, ferramentas SaaS, microserviços que cobram por chamada via **HTTP 402 Payment Required**. Mas **não existe hoje uma camada de governança e auditoria desses gastos autônomos**. CTOs e founders ficam com três opções ruins:
+Agentes de IA já estão pagando por coisas em produção — APIs de LLM, scrapers, ferramentas SaaS, microserviços que cobram por chamada. O código de status **HTTP 402 ("Payment Required") existe há anos** na especificação HTTP, mas só agora — com o avanço dos agentes de IA e da infraestrutura blockchain — está se tornando **viável** como meio de pagamento real; padrões emergentes como **MPP** (Stripe/Tempo) e **x402** (Coinbase) já estão padronizando esse fluxo.
 
-1. **Dar um cartão corporativo ao agente** — sem controle granular, auditoria fraca, expostos a fraude.
-2. **Stripe Issuing / virtual cards** — taxa alta, settlement lento, ainda assim sem trilha cripto-verificável.
-3. **Codar controles ad-hoc no próprio agente** — cada projeto reinventa rate limits, budgets e aprovação humana, mal-feito e sem auditoria externa.
+O que **não existe** é uma camada de **governança e auditoria** entre o agente e o dinheiro. Um agente com uma credencial pode gastar sem checagem de política por transação, sem teto de orçamento e sem ponto de aprovação humana. As alternativas atuais não cobrem isso:
+
+1. **Cartão corporativo / Stripe Issuing** — têm controles de gasto e autorização em tempo real, mas não foram feitos para pagamentos agente→fornecedor baseados em HTTP 402, liquidação on-chain, nem para gerar um comprovante de cada gasto que qualquer pessoa possa verificar de forma independente.
+2. **Controles ad-hoc dentro do próprio agente** — cada time reinventa rate limit, orçamento e aprovação humana, mal-feito e sem auditoria externa.
+
+Os meios de pagamento para agentes estão surgindo rápido — a camada de controle por cima deles continua em aberto.
 
 ## A solução
 
-**Aegis Protocol** é um gateway de pagamento para agentes de IA com governança econômica embutida:
+**O Aegis não é mais um meio de pagamento. É a camada de governança que decide se um agente de IA pode gastar — antes do dinheiro se mover.**
 
-- **Recebe pedidos de gasto** via REST + SDK TypeScript com `Authorization: Bearer cr_...`.
-- **Avalia contra políticas customizáveis** em milissegundos — engine determinística, zero I/O.
-- **Decide:** `APPROVED`, `REQUIRES_APPROVAL` (escala para humano), ou `REJECTED` com justificativa.
-- **Executa pagamento on-chain real** na Stellar (USDC via SEP-24 anchor) — testnet primeiro, mainnet depois.
-- **Emite recibo imutável** via contrato Soroban — cada decisão vira evento on-chain consultável.
-- **Dashboard web** para admin: políticas, vendors, agentes, aprovações humanas, fiat ramp.
+O **Aegis Protocol**:
+
+- **Recebe pedidos de gasto** via API REST + SDK TypeScript, no fluxo HTTP 402.
+- **Avalia contra políticas determinísticas** em milissegundos — engine pura, sem I/O.
+- **Decide:** `APPROVED`, `REQUIRES_APPROVAL` (exige aprovação humana) ou `REJECTED` — sempre com justificativa.
+- **Executa o pagamento on-chain** na Stellar (USDC) quando aprovado — o agente **nunca** tem a chave; o Aegis custodia e assina.
+- **Emite recibo imutável** via contrato Soroban — cada decisão vira um evento on-chain consultável.
+- **Dashboard web** para o admin: políticas, vendors, agentes, fila de aprovação humana, saldos da treasury e fiat ramp.
 
 ### Diferenciais técnicos
 
-🪶 **Fricção zero blockchain** — Aegis usa Sponsored Reserves (CAP-33) e Fee Bump (CAP-15) da Stellar. Vendor e Company **nunca precisam ter XLM nem entender blockchain**. Vendor escolhe receber em **USDC, EURC, BRL** ou outra moeda suportada por anchor — Aegis converte automaticamente via DEX nativa Stellar (Path Payment Strict Receive). Onboarding em segundos.
+🪶 **Fricção zero de blockchain** — usa Sponsored Reserves (CAP-33) e Fee Bump (CAP-15) da Stellar. Vendor e Company **nunca precisam ter XLM nem entender de blockchain**. O vendor recebe em **USDC** ou outro asset Stellar (ex.: EURC), com conversão automática via DEX nativa (Path Payment Strict Receive). Onboarding em segundos.
 
-💵 **Fiat in/out integrado** — SEP-24 anchor (testnet: `testanchor.stellar.org`, mainnet futuro: Circle, Anclap, MoneyGram). Company deposita em moeda local, agente paga em USDC, vendor recebe na moeda que preferir (USDC/EURC/BRL/...) ou converte fiat de volta.
+💵 **Fiat on/off-ramp integrado** — via anchor **Etherfuse** (BRL/MXN com Pix/SPEI). A Company deposita em moeda local e a treasury recebe USDC; e converte USDC de volta para fiat quando precisa. *(Pagar o fornecedor direto em fiat — Pix/conta bancária — é roadmap via SEP-31.)*
 
-🔐 **Custódia simétrica** — agente **nunca** tem acesso à chave Stellar; Aegis tem. Política e chave separadas por design.
+🔐 **Agente sem custódia** — o agente nunca tem acesso à chave Stellar; só o Aegis. Política e chave separadas por design.
 
-📜 **Auditoria cripto-verificável** — contrato Soroban global emite evento por decisão, com `companyId` indexado como topic. Histórico permanente, queryable via Soroban RPC.
+📜 **Auditoria verificável** — um contrato Soroban global emite um comprovante on-chain a cada decisão, com `companyId` indexado como topic. Qualquer pessoa pode consultar e verificar esse histórico de forma independente, via Soroban RPC.
 
-🔒 **Kill switch** (stretch goal) — quando ativado, asset Aegis-issued com `AUTH_CLAWBACK_ENABLED` permite revogar tokens da treasury comprometida via operação Clawback. Visível no Stellar Expert.
+🔒 **Kill switch** (stretch goal) — quando ativado, um asset Aegis-issued com `AUTH_CLAWBACK_ENABLED` permite revogar tokens de uma treasury comprometida via Clawback.
 
 ---
 
