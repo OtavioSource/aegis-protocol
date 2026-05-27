@@ -8,6 +8,8 @@
  * 4. rotas
  */
 
+import { randomUUID } from 'node:crypto';
+
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import Fastify from 'fastify';
@@ -22,6 +24,7 @@ import { env } from './env.js';
 import authAgent from './plugins/auth-agent.js';
 import errorHandler from './plugins/error-handler.js';
 import etherfusePlugin from './plugins/etherfuse.js';
+import observabilityPlugin from './plugins/observability.js';
 import prismaPlugin from './plugins/prisma.js';
 import rateLimitPlugin from './plugins/rate-limit.js';
 import stellarPlugin from './plugins/stellar.js';
@@ -52,6 +55,13 @@ async function main(): Promise<void> {
               options: { translateTime: 'SYS:HH:MM:ss.l', ignore: 'pid,hostname' },
             },
     },
+    // Respeita um `x-request-id` recebido do cliente (rastreio end-to-end);
+    // gera um UUID novo caso o header esteja ausente.
+    genReqId: (req) => {
+      const incoming = req.headers['x-request-id'];
+      if (typeof incoming === 'string' && incoming.length > 0) return incoming;
+      return randomUUID();
+    },
   }).withTypeProvider<ZodTypeProvider>();
 
   // Zod como validator e serializer
@@ -60,6 +70,7 @@ async function main(): Promise<void> {
 
   // Plugins de infra
   await app.register(errorHandler);
+  await app.register(observabilityPlugin);
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, { origin: true });
   await app.register(prismaPlugin);
@@ -81,6 +92,22 @@ async function main(): Promise<void> {
   await app.register(approvalsRoute);
   await app.register(auditRoute);
   await app.register(fiatRoute);
+
+  // Graceful shutdown — drena requests pendentes e fecha conexões (Prisma etc.)
+  // antes de encerrar. Em SIGINT/SIGTERM espera `app.close()` resolver.
+  const shutdown = async (signal: string): Promise<void> => {
+    app.log.info({ signal }, 'shutdown signal received — draining');
+    try {
+      await app.close();
+      app.log.info('shutdown complete');
+      process.exit(0);
+    } catch (err) {
+      app.log.error({ err }, 'shutdown failed');
+      process.exit(1);
+    }
+  };
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
   try {
     await app.listen({ port: env.PORT, host: env.HOST });
