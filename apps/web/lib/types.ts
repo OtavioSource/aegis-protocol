@@ -111,4 +111,4 @@ export type TreasuryBalances = {
   balances: { assetCode: string; amount: string; amountCents: number | null }[];
 };
 
-export type Listed<T> = { data: T[] };
+export type Listed<T> = { data: T[]; total?: number };
