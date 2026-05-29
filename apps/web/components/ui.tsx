@@ -23,18 +23,20 @@ export function SectionCard({
   title,
   action,
   children,
+  noPadding,
 }: {
   title: string;
   action?: ReactNode;
   children: ReactNode;
+  noPadding?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-ink-700 bg-ink-850">
+    <div className="overflow-hidden rounded-xl border border-ink-700 bg-ink-850">
       <div className="flex items-center justify-between border-b border-ink-700 px-5 py-3">
         <h2 className="text-sm font-semibold text-slate-100">{title}</h2>
         {action}
       </div>
-      <div className="p-5">{children}</div>
+      <div className={noPadding ? '' : 'p-5'}>{children}</div>
     </div>
   );
 }
@@ -43,15 +45,28 @@ export function StatCard({
   label,
   value,
   hint,
+  icon,
+  valueClassName,
 }: {
   label: string;
   value: ReactNode;
   hint?: string;
+  icon?: ReactNode;
+  valueClassName?: string;
 }) {
   return (
     <Card>
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-100">{value}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</p>
+        {icon ? (
+          <span className="text-slate-600" aria-hidden="true">
+            {icon}
+          </span>
+        ) : null}
+      </div>
+      <p className={cn('mt-3 text-2xl font-semibold tabular-nums', valueClassName ?? 'text-slate-100')}>
+        {value}
+      </p>
       {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
     </Card>
   );
@@ -170,9 +185,15 @@ export function Button({
 
 // ------------------------------------------------------------------ table ----
 
-export function Table({ children }: { children: ReactNode }) {
+export function Table({
+  children,
+  flush,
+}: {
+  children: ReactNode;
+  flush?: boolean;
+}) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-ink-700">
+    <div className={cn('overflow-x-auto', flush ? '' : 'rounded-lg border border-ink-700')}>
       <table className="w-full text-left text-sm">{children}</table>
     </div>
   );
