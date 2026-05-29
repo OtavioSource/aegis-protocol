@@ -233,6 +233,61 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={cn(FIELD_CLASS, props.className)} />;
 }
 
+// -------------------------------------------------------------- pagination ----
+
+export function Pagination({
+  page,
+  total,
+  pageSize,
+  basePath,
+}: {
+  page: number;
+  total: number;
+  pageSize: number;
+  basePath: string;
+}) {
+  const totalPages = Math.ceil(total / pageSize);
+  if (totalPages <= 1) return null;
+
+  const prevPage = page > 1 ? page - 1 : null;
+  const nextPage = page < totalPages ? page + 1 : null;
+
+  return (
+    <div className="mt-4 flex items-center justify-between text-sm text-slate-400">
+      <span>
+        Página {page} de {totalPages}
+        <span className="ml-2 text-slate-600">({total} eventos)</span>
+      </span>
+      <div className="flex gap-2">
+        {prevPage ? (
+          <a
+            href={`${basePath}?page=${prevPage}`}
+            className="inline-flex items-center gap-1 rounded-lg border border-ink-600 px-3 py-1.5 text-slate-200 transition-colors hover:bg-ink-800"
+          >
+            ← Anterior
+          </a>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-lg border border-ink-700 px-3 py-1.5 text-slate-600 opacity-50 cursor-not-allowed">
+            ← Anterior
+          </span>
+        )}
+        {nextPage ? (
+          <a
+            href={`${basePath}?page=${nextPage}`}
+            className="inline-flex items-center gap-1 rounded-lg border border-ink-600 px-3 py-1.5 text-slate-200 transition-colors hover:bg-ink-800"
+          >
+            Próxima →
+          </a>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-lg border border-ink-700 px-3 py-1.5 text-slate-600 opacity-50 cursor-not-allowed">
+            Próxima →
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ----------------------------------------------------------------- format ----
 
 /** Centavos → string monetária ("1234" → "12.34"). */
