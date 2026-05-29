@@ -1,5 +1,6 @@
 'use client';
 
+import { Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 
@@ -14,17 +15,13 @@ export type FormAction = (state: ActionState, formData: FormData) => Promise<Act
 function Submit({ label, variant }: { label: string; variant?: 'primary' | 'danger' | 'subtle' | 'ghost' }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" variant={variant} disabled={pending}>
+    <Button type="submit" variant={variant} disabled={pending} aria-busy={pending}>
+      {pending && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
       {pending ? 'Enviando…' : label}
     </Button>
   );
 }
 
-/**
- * Form genérico ligado a um server action via useFormState. Exibe mensagem de
- * sucesso/erro e, se o action devolver `secret`, mostra-o num bloco destacado
- * (ex: API key de Agent — exibida só uma vez).
- */
 export function ActionForm({
   action,
   submitLabel,
@@ -43,7 +40,10 @@ export function ActionForm({
       <div className="flex items-center gap-3">
         <Submit label={submitLabel} variant={submitVariant} />
         {state.message ? (
-          <span className={state.ok ? 'text-sm text-emerald-400' : 'text-sm text-rose-400'}>
+          <span
+            role="status"
+            className={state.ok ? 'text-sm text-emerald-400' : 'text-sm text-rose-400'}
+          >
             {state.message}
           </span>
         ) : null}

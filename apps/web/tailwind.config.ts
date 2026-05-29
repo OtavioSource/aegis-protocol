@@ -4,6 +4,10 @@ const config: Config = {
   content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['Fira Code', 'ui-monospace', 'monospace'],
+      },
       colors: {
         ink: {
           950: '#0a0c10',
@@ -17,6 +21,12 @@ const config: Config = {
           DEFAULT: '#5b9cff',
           soft: '#1e2c47',
         },
+      },
+      ringColor: {
+        DEFAULT: '#5b9cff',
+      },
+      ringOffsetColor: {
+        DEFAULT: '#0a0c10',
       },
     },
   },
