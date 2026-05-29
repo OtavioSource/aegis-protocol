@@ -14,15 +14,13 @@ out/
 contracts/**/target/
 contracts/**/Cargo.lock
 
-# Environment (preserva .env.example)
+# Environment
 .env
 .env.local
 .env.*.local
 *.env
 *.env.local
 *.env.production
-!.env.example
-!**/.env.example
 
 # Logs
 *.log
@@ -46,17 +44,12 @@ prisma/migrations/dev.db*
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Pessoal / local
+# Internal
 .claude/
 aulas/
-
-# Documentos internos (mantidos fora do repositório público)
 docs/
-.vercel
