@@ -15,7 +15,7 @@ import type { AuditEvent, Listed } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 20;
 
 export default async function AuditPage({
   searchParams,
