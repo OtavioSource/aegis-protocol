@@ -1,5 +1,6 @@
 'use client';
 
+import { Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -10,6 +11,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -31,23 +33,59 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
+    <main className="flex min-h-dvh items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
+          <div className="mb-3 flex justify-center">
+            <ShieldCheck size={36} className="text-accent" aria-hidden="true" />
+          </div>
           <h1 className="text-2xl font-semibold text-slate-100">Aegis Protocol</h1>
           <p className="mt-1 text-sm text-slate-500">Console de governança</p>
         </div>
+
         <form
           onSubmit={onSubmit}
           className="space-y-4 rounded-xl border border-ink-700 bg-ink-850 p-6"
+          noValidate
         >
           <Field label="Email">
-            <Input name="email" type="email" required autoComplete="email" placeholder="admin@aegis-demo.com" />
+            <Input
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="admin@aegis-demo.com"
+              aria-describedby={error ? 'login-error' : undefined}
+            />
           </Field>
+
           <Field label="Senha">
-            <Input name="password" type="password" required autoComplete="current-password" />
+            <div className="relative">
+              <Input
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                required
+                autoComplete="current-password"
+                className="pr-10"
+                aria-describedby={error ? 'login-error' : undefined}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer text-slate-500 transition-colors hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              >
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
           </Field>
-          {error ? <p className="text-sm text-rose-400">{error}</p> : null}
+
+          {error ? (
+            <p id="login-error" role="alert" className="text-sm text-rose-400">
+              {error}
+            </p>
+          ) : null}
+
           <Button type="submit" disabled={pending} className="w-full">
             {pending ? 'Entrando…' : 'Entrar'}
           </Button>

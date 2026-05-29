@@ -81,7 +81,7 @@ export function PageHeader({
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-ink-700 px-4 py-10 text-center text-sm text-slate-500">
+    <div className="rounded-lg border border-dashed border-ink-600 px-4 py-12 text-center text-sm text-slate-500">
       {children}
     </div>
   );
@@ -157,7 +157,9 @@ export function Button({
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50',
+        'inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1 focus-visible:ring-offset-ink-950',
+        'disabled:cursor-not-allowed disabled:opacity-50',
         BUTTON_VARIANT[variant],
         className,
       )}
@@ -189,7 +191,7 @@ export function Th({ children }: { children: ReactNode }) {
 }
 
 export function Tr({ children }: { children: ReactNode }) {
-  return <tr className="border-t border-ink-700 hover:bg-ink-800/50">{children}</tr>;
+  return <tr className="border-t border-ink-700 transition-colors hover:bg-ink-800/60">{children}</tr>;
 }
 
 export function Td({ children, className }: { children: ReactNode; className?: string }) {
@@ -217,7 +219,7 @@ export function Field({
 }
 
 const FIELD_CLASS =
-  'w-full rounded-lg border border-ink-600 bg-ink-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-accent focus:outline-none';
+  'w-full rounded-lg border border-ink-600 bg-ink-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20';
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(FIELD_CLASS, props.className)} />;
