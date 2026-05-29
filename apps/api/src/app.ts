@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -10,6 +12,7 @@ import {
 import authAgent from './plugins/auth-agent.js';
 import errorHandler from './plugins/error-handler.js';
 import etherfusePlugin from './plugins/etherfuse.js';
+import observabilityPlugin from './plugins/observability.js';
 import prismaPlugin from './plugins/prisma.js';
 import rateLimitPlugin from './plugins/rate-limit.js';
 import stellarPlugin from './plugins/stellar.js';
@@ -39,12 +42,20 @@ export async function buildApp(): Promise<FastifyInstance> {
               options: { translateTime: 'SYS:HH:MM:ss.l', ignore: 'pid,hostname' },
             },
     },
+    // Respeita um `x-request-id` recebido do cliente (rastreio end-to-end);
+    // gera um UUID novo caso o header esteja ausente.
+    genReqId: (req) => {
+      const incoming = req.headers['x-request-id'];
+      if (typeof incoming === 'string' && incoming.length > 0) return incoming;
+      return randomUUID();
+    },
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
   await app.register(errorHandler);
+  await app.register(observabilityPlugin);
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, { origin: true });
   await app.register(prismaPlugin);
