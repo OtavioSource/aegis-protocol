@@ -172,7 +172,7 @@ export function Button({
   return (
     <button
       className={cn(
-        'inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+        'inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors min-h-[44px]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1 focus-visible:ring-offset-ink-950',
         'disabled:cursor-not-allowed disabled:opacity-50',
         BUTTON_VARIANT[variant],
@@ -240,7 +240,7 @@ export function Field({
 }
 
 const FIELD_CLASS =
-  'w-full rounded-lg border border-ink-600 bg-ink-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20';
+  'w-full min-h-[44px] rounded-lg border border-ink-600 bg-ink-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20';
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(FIELD_CLASS, props.className)} />;
