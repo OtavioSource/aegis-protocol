@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 
+import { MobileNav } from '@/components/mobile-nav';
 import { Nav } from '@/components/nav';
 import { SignOutButton } from '@/components/sign-out-button';
 import { authOptions } from '@/lib/auth';
@@ -17,7 +18,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         Pular para o conteúdo
       </a>
 
-      <aside className="flex w-56 flex-col border-r border-ink-700 bg-ink-900 p-4">
+      {/* Mobile: top bar fixo + drawer deslizante */}
+      <MobileNav
+        name={session.user.name ?? ''}
+        role={session.user.role}
+        companyName={session.user.companyName}
+      />
+
+      {/* Desktop sidebar — escondido em mobile */}
+      <aside className="hidden md:flex w-56 flex-col border-r border-ink-700 bg-ink-900 p-4">
         <div className="mb-6 flex items-center gap-2">
           <ShieldCheck size={18} className="shrink-0 text-accent" aria-hidden="true" />
           <div>
@@ -37,7 +46,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main id="main-content" className="flex-1 overflow-x-hidden p-8" tabIndex={-1}>
+      {/* Main — pt compensa a top bar fixa no mobile */}
+      <main
+        id="main-content"
+        className="flex-1 overflow-x-hidden px-4 pb-8 pt-[72px] md:p-8"
+        tabIndex={-1}
+      >
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
     </div>
