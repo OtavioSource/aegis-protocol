@@ -1,3 +1,5 @@
+import { ExternalLink } from 'lucide-react';
+
 import { ActionForm } from '@/components/action-form';
 import {
   Badge,
@@ -101,9 +103,10 @@ export default async function SpendRequestsPage() {
                       href={sr.stellarExpertUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-accent hover:underline"
+                      className="inline-flex items-center gap-1 text-accent transition-colors hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                      aria-label="View transaction on Stellar Expert (opens in a new tab)"
                     >
-                      view
+                      view <ExternalLink size={11} aria-hidden="true" />
                     </a>
                   ) : (
                     '—'

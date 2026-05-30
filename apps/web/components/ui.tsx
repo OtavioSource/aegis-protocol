@@ -23,18 +23,20 @@ export function SectionCard({
   title,
   action,
   children,
+  noPadding,
 }: {
   title: string;
   action?: ReactNode;
   children: ReactNode;
+  noPadding?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-ink-700 bg-ink-850">
+    <div className="overflow-hidden rounded-xl border border-ink-700 bg-ink-850">
       <div className="flex items-center justify-between border-b border-ink-700 px-5 py-3">
         <h2 className="text-sm font-semibold text-slate-100">{title}</h2>
         {action}
       </div>
-      <div className="p-5">{children}</div>
+      <div className={noPadding ? '' : 'p-5'}>{children}</div>
     </div>
   );
 }
@@ -43,15 +45,28 @@ export function StatCard({
   label,
   value,
   hint,
+  icon,
+  valueClassName,
 }: {
   label: string;
   value: ReactNode;
   hint?: string;
+  icon?: ReactNode;
+  valueClassName?: string;
 }) {
   return (
     <Card>
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-100">{value}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</p>
+        {icon ? (
+          <span className="text-slate-600" aria-hidden="true">
+            {icon}
+          </span>
+        ) : null}
+      </div>
+      <p className={cn('mt-3 text-2xl font-semibold tabular-nums', valueClassName ?? 'text-slate-100')}>
+        {value}
+      </p>
       {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
     </Card>
   );
@@ -81,7 +96,7 @@ export function PageHeader({
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-ink-700 px-4 py-10 text-center text-sm text-slate-500">
+    <div className="rounded-lg border border-dashed border-ink-600 px-4 py-12 text-center text-sm text-slate-500">
       {children}
     </div>
   );
@@ -157,7 +172,9 @@ export function Button({
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50',
+        'inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors min-h-[44px]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1 focus-visible:ring-offset-ink-950',
+        'disabled:cursor-not-allowed disabled:opacity-50',
         BUTTON_VARIANT[variant],
         className,
       )}
@@ -168,9 +185,15 @@ export function Button({
 
 // ------------------------------------------------------------------ table ----
 
-export function Table({ children }: { children: ReactNode }) {
+export function Table({
+  children,
+  flush,
+}: {
+  children: ReactNode;
+  flush?: boolean;
+}) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-ink-700">
+    <div className={cn('overflow-x-auto', flush ? '' : 'rounded-lg border border-ink-700')}>
       <table className="w-full text-left text-sm">{children}</table>
     </div>
   );
@@ -189,7 +212,7 @@ export function Th({ children }: { children: ReactNode }) {
 }
 
 export function Tr({ children }: { children: ReactNode }) {
-  return <tr className="border-t border-ink-700 hover:bg-ink-800/50">{children}</tr>;
+  return <tr className="border-t border-ink-700 transition-colors hover:bg-ink-800/60">{children}</tr>;
 }
 
 export function Td({ children, className }: { children: ReactNode; className?: string }) {
@@ -217,7 +240,7 @@ export function Field({
 }
 
 const FIELD_CLASS =
-  'w-full rounded-lg border border-ink-600 bg-ink-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-accent focus:outline-none';
+  'w-full min-h-[44px] rounded-lg border border-ink-600 bg-ink-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20';
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(FIELD_CLASS, props.className)} />;
@@ -229,6 +252,61 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
 
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={cn(FIELD_CLASS, props.className)} />;
+}
+
+// -------------------------------------------------------------- pagination ----
+
+export function Pagination({
+  page,
+  total,
+  pageSize,
+  basePath,
+}: {
+  page: number;
+  total: number;
+  pageSize: number;
+  basePath: string;
+}) {
+  const totalPages = Math.ceil(total / pageSize);
+  if (totalPages <= 1) return null;
+
+  const prevPage = page > 1 ? page - 1 : null;
+  const nextPage = page < totalPages ? page + 1 : null;
+
+  return (
+    <div className="mt-4 flex items-center justify-between text-sm text-slate-400">
+      <span>
+        Página {page} de {totalPages}
+        <span className="ml-2 text-slate-600">({total} eventos)</span>
+      </span>
+      <div className="flex gap-2">
+        {prevPage ? (
+          <a
+            href={`${basePath}?page=${prevPage}`}
+            className="inline-flex items-center gap-1 rounded-lg border border-ink-600 px-3 py-1.5 text-slate-200 transition-colors hover:bg-ink-800"
+          >
+            ← Anterior
+          </a>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-lg border border-ink-700 px-3 py-1.5 text-slate-600 opacity-50 cursor-not-allowed">
+            ← Anterior
+          </span>
+        )}
+        {nextPage ? (
+          <a
+            href={`${basePath}?page=${nextPage}`}
+            className="inline-flex items-center gap-1 rounded-lg border border-ink-600 px-3 py-1.5 text-slate-200 transition-colors hover:bg-ink-800"
+          >
+            Próxima →
+          </a>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-lg border border-ink-700 px-3 py-1.5 text-slate-600 opacity-50 cursor-not-allowed">
+            Próxima →
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ----------------------------------------------------------------- format ----
