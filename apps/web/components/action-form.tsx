@@ -15,7 +15,7 @@ function Submit({ label, variant }: { label: string; variant?: 'primary' | 'dang
   const { pending } = useFormStatus();
   return (
     <Button type="submit" variant={variant} disabled={pending}>
-      {pending ? 'Enviando…' : label}
+      {pending ? 'Submitting…' : label}
     </Button>
   );
 }
@@ -50,7 +50,7 @@ export function ActionForm({
       </div>
       {state.secret ? (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-          <p className="text-xs text-amber-300">Guarde agora — exibido apenas uma vez:</p>
+          <p className="text-xs text-amber-300">Save now — shown only once:</p>
           <code className="mt-1 block break-all text-xs text-amber-200">{state.secret}</code>
         </div>
       ) : null}

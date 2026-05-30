@@ -33,16 +33,16 @@ export default async function SpendRequestsPage() {
     <>
       <PageHeader
         title="Spend Requests"
-        description="Pedidos de gasto avaliados pela engine de políticas."
+        description="Spend requests evaluated by the policy engine."
       />
 
       <div className="mb-6">
-        <SectionCard title="Nova spend request">
-          <ActionForm action={createSpendRequest} submitLabel="Criar">
+        <SectionCard title="New spend request">
+          <ActionForm action={createSpendRequest} submitLabel="Create">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Vendor">
                 <Select name="vendorId" required>
-                  <option value="">Selecione…</option>
+                  <option value="">Select…</option>
                   {vendors.data.map((v) => (
                     <option key={v.id} value={v.id}>
                       {v.name}
@@ -50,34 +50,34 @@ export default async function SpendRequestsPage() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Action type" hint="ex: api-call, compute">
+              <Field label="Action type" hint="e.g. api-call, compute">
                 <Input name="actionType" required placeholder="api-call" />
               </Field>
-              <Field label="Valor (centavos)" hint="100 = $1.00">
+              <Field label="Amount (cents)" hint="100 = $1.00">
                 <Input name="amountCents" type="number" min="1" required placeholder="100" />
               </Field>
               <Field label="Asset">
                 <Input name="asset" defaultValue="USDC" />
               </Field>
             </div>
-            <Field label="Motivo (opcional)">
-              <Input name="reason" placeholder="Descrição do gasto" />
+            <Field label="Reason (optional)">
+              <Input name="reason" placeholder="Spend description" />
             </Field>
           </ActionForm>
         </SectionCard>
       </div>
 
       {spend.data.length === 0 ? (
-        <EmptyState>Nenhuma spend request ainda.</EmptyState>
+        <EmptyState>No spend requests yet.</EmptyState>
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Data</Th>
-              <Th>Ação</Th>
+              <Th>Date</Th>
+              <Th>Action</Th>
               <Th>Vendor</Th>
-              <Th>Valor</Th>
-              <Th>Decisão</Th>
+              <Th>Amount</Th>
+              <Th>Decision</Th>
               <Th>Status</Th>
               <Th>Tx</Th>
             </Tr>
@@ -103,7 +103,7 @@ export default async function SpendRequestsPage() {
                       rel="noreferrer"
                       className="text-accent hover:underline"
                     >
-                      ver
+                      view
                     </a>
                   ) : (
                     '—'

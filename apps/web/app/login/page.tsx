@@ -23,7 +23,7 @@ export default function LoginPage() {
     });
     setPending(false);
     if (!res || res.error) {
-      setError('Email ou senha inválidos.');
+      setError('Invalid email or password.');
       return;
     }
     router.push('/');
@@ -35,7 +35,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-slate-100">Aegis Protocol</h1>
-          <p className="mt-1 text-sm text-slate-500">Console de governança</p>
+          <p className="mt-1 text-sm text-slate-500">Governance Console</p>
         </div>
         <form
           onSubmit={onSubmit}
@@ -44,12 +44,12 @@ export default function LoginPage() {
           <Field label="Email">
             <Input name="email" type="email" required autoComplete="email" placeholder="admin@aegis-demo.com" />
           </Field>
-          <Field label="Senha">
+          <Field label="Password">
             <Input name="password" type="password" required autoComplete="current-password" />
           </Field>
           {error ? <p className="text-sm text-rose-400">{error}</p> : null}
           <Button type="submit" disabled={pending} className="w-full">
-            {pending ? 'Entrando…' : 'Entrar'}
+            {pending ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
       </div>

@@ -6,12 +6,12 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Aegis Protocol',
   description:
-    'Camada de governança econômica para agentes de IA que pagam autonomamente via Stellar.',
+    'Economic governance layer for AI agents that pay autonomously via Stellar.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-BR">
+    <html lang="en">
       <body>{children}</body>
     </html>
   );

@@ -244,7 +244,7 @@ export function fmtCents(cents: number | null | undefined): string {
 
 export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('pt-BR', {
+  return new Date(iso).toLocaleString('en-US', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

@@ -8,7 +8,7 @@ export function SignOutButton() {
       onClick={() => signOut({ callbackUrl: '/login' })}
       className="text-xs text-slate-400 hover:text-slate-200"
     >
-      Sair
+      Sign out
     </button>
   );
 }

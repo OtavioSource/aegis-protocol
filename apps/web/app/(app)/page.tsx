@@ -34,40 +34,40 @@ export default async function OverviewPage() {
   return (
     <>
       <PageHeader
-        title="Visão geral"
-        description={`Treasury ${treasury.treasuryPublicKey.slice(0, 8)}… · rede ${treasury.network}`}
+        title="Overview"
+        description={`Treasury ${treasury.treasuryPublicKey.slice(0, 8)}… · network ${treasury.network}`}
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Treasury USDC" value={usdc?.amount ?? '0'} />
         <StatCard label="Treasury XLM" value={xlm?.amount ?? '0'} />
         <StatCard
-          label="Aprovações pendentes"
+          label="Pending approvals"
           value={pending.data.length}
-          hint="aguardando decisão humana"
+          hint="awaiting human decision"
         />
         <StatCard label="Spend requests" value={spend.data.length} />
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Vendors" value={vendors.data.length} />
-        <StatCard label="Agentes" value={agents.data.length} />
+        <StatCard label="Agents" value={agents.data.length} />
       </div>
 
       <h2 className="mb-3 mt-8 text-sm font-semibold text-slate-100">
-        Spend requests recentes
+        Recent spend requests
       </h2>
       {recent.length === 0 ? (
-        <EmptyState>Nenhuma spend request ainda.</EmptyState>
+        <EmptyState>No spend requests yet.</EmptyState>
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Data</Th>
-              <Th>Ação</Th>
+              <Th>Date</Th>
+              <Th>Action</Th>
               <Th>Vendor</Th>
-              <Th>Valor</Th>
-              <Th>Decisão</Th>
+              <Th>Amount</Th>
+              <Th>Decision</Th>
               <Th>Status</Th>
             </Tr>
           </THead>

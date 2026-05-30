@@ -16,12 +16,12 @@ export default async function ApprovalsPage() {
   return (
     <>
       <PageHeader
-        title="Aprovações"
-        description="Spend requests escaladas para decisão humana (RF7). Aprovar dispara o pagamento on-chain."
+        title="Approvals"
+        description="Spend requests escalated for human decision. Approval triggers the on-chain payment."
       />
 
       {pending.data.length === 0 ? (
-        <EmptyState>Nenhuma aprovação pendente.</EmptyState>
+        <EmptyState>No pending approvals.</EmptyState>
       ) : (
         <div className="space-y-4">
           {pending.data.map((sr) => (
@@ -40,18 +40,18 @@ export default async function ApprovalsPage() {
                   ) : null}
                   {sr.decisionReason ? (
                     <p className="mt-1 text-xs text-amber-300">
-                      Motivo da escalada: {sr.decisionReason}
+                      Escalation reason: {sr.decisionReason}
                     </p>
                   ) : null}
                 </div>
                 <div className="flex gap-3">
-                  <ActionForm action={approveSpend} submitLabel="Aprovar e executar">
+                  <ActionForm action={approveSpend} submitLabel="Approve and execute">
                     <input type="hidden" name="spendRequestId" value={sr.id} />
                     <input type="hidden" name="action" value="APPROVED" />
                   </ActionForm>
                   <ActionForm
                     action={approveSpend}
-                    submitLabel="Rejeitar"
+                    submitLabel="Reject"
                     submitVariant="danger"
                   >
                     <input type="hidden" name="spendRequestId" value={sr.id} />

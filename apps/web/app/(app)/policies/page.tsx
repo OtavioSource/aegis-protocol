@@ -26,24 +26,24 @@ export default async function PoliciesPage() {
   return (
     <>
       <PageHeader
-        title="Políticas"
-        description="Regras determinísticas avaliadas pela engine. Limites null = sem limite."
+        title="Policies"
+        description="Deterministic rules evaluated by the policy engine. Null limits = no limit."
       />
 
       <div className="mb-6">
-        <SectionCard title="Nova política">
-          <ActionForm action={createPolicy} submitLabel="Criar política">
-            <Field label="Nome">
+        <SectionCard title="New policy">
+          <ActionForm action={createPolicy} submitLabel="Create policy">
+            <Field label="Name">
               <Input name="name" required placeholder="Conservative Policy" />
             </Field>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Máx por transação (¢)" hint="vazio = sem limite">
+              <Field label="Max per transaction (¢)" hint="empty = no limit">
                 <Input name="maxPerTransactionCents" type="number" min="0" placeholder="50000" />
               </Field>
-              <Field label="Orçamento mensal (¢)" hint="vazio = sem limite">
+              <Field label="Monthly budget (¢)" hint="empty = no limit">
                 <Input name="monthlyBudgetCents" type="number" min="0" placeholder="5000000" />
               </Field>
-              <Field label="Limite p/ aprovação (¢)" hint="acima → humano">
+              <Field label="Approval threshold (¢)" hint="above → human">
                 <Input
                   name="humanApprovalThresholdCents"
                   type="number"
@@ -52,7 +52,7 @@ export default async function PoliciesPage() {
                 />
               </Field>
             </div>
-            <Field label="Action types permitidos" hint="separados por vírgula; vazio = todos">
+            <Field label="Allowed action types" hint="comma-separated; empty = all">
               <Input name="actionTypes" placeholder="api-call, compute, scraping" />
             </Field>
           </ActionForm>
@@ -60,19 +60,19 @@ export default async function PoliciesPage() {
       </div>
 
       {policies.data.length === 0 ? (
-        <EmptyState>Nenhuma política cadastrada.</EmptyState>
+        <EmptyState>No policies registered.</EmptyState>
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Nome</Th>
-              <Th>Versão</Th>
-              <Th>Máx/tx</Th>
-              <Th>Orçamento mês</Th>
-              <Th>Aprovação ≥</Th>
+              <Th>Name</Th>
+              <Th>Version</Th>
+              <Th>Max/tx</Th>
+              <Th>Monthly budget</Th>
+              <Th>Approval ≥</Th>
               <Th>Action types</Th>
-              <Th>Estado</Th>
-              <Th>Criada</Th>
+              <Th>State</Th>
+              <Th>Created</Th>
             </Tr>
           </THead>
           <tbody>
@@ -83,9 +83,9 @@ export default async function PoliciesPage() {
                 <Td>{fmtCents(p.rules.maxPerTransactionCents)}</Td>
                 <Td>{fmtCents(p.rules.monthlyBudgetCents)}</Td>
                 <Td>{fmtCents(p.rules.humanApprovalThresholdCents)}</Td>
-                <Td>{p.rules.actionTypes.length > 0 ? p.rules.actionTypes.join(', ') : 'todos'}</Td>
+                <Td>{p.rules.actionTypes.length > 0 ? p.rules.actionTypes.join(', ') : 'all'}</Td>
                 <Td>
-                  {p.isActive ? <Badge tone="green">ativa</Badge> : <Badge tone="gray">inativa</Badge>}
+                  {p.isActive ? <Badge tone="green">active</Badge> : <Badge tone="gray">inactive</Badge>}
                 </Td>
                 <Td>{fmtDate(p.createdAt)}</Td>
               </Tr>

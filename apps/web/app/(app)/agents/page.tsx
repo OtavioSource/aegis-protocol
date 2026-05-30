@@ -30,20 +30,20 @@ export default async function AgentsPage() {
   return (
     <>
       <PageHeader
-        title="Agentes"
-        description="Identidades de IA que enviam spend requests. Cada agente tem uma API key cr_."
+        title="Agents"
+        description="AI identities that submit spend requests. Each agent has a cr_ API key."
       />
 
       <div className="mb-6">
-        <SectionCard title="Novo agente">
-          <ActionForm action={createAgent} submitLabel="Criar agente">
+        <SectionCard title="New agent">
+          <ActionForm action={createAgent} submitLabel="Create agent">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Nome">
+              <Field label="Name">
                 <Input name="name" required placeholder="Customer Success Bot" />
               </Field>
-              <Field label="Política ativa">
+              <Field label="Active policy">
                 <Select name="activePolicyId" required>
-                  <option value="">Selecione…</option>
+                  <option value="">Select…</option>
                   {policies.data.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} v{p.version}
@@ -52,24 +52,24 @@ export default async function AgentsPage() {
                 </Select>
               </Field>
             </div>
-            <Field label="Descrição (opcional)">
-              <Input name="description" placeholder="Agente para automação tier-1" />
+            <Field label="Description (optional)">
+              <Input name="description" placeholder="Agent for tier-1 automation" />
             </Field>
           </ActionForm>
         </SectionCard>
       </div>
 
       {agents.data.length === 0 ? (
-        <EmptyState>Nenhum agente cadastrado.</EmptyState>
+        <EmptyState>No agents registered.</EmptyState>
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Nome</Th>
+              <Th>Name</Th>
               <Th>API key</Th>
-              <Th>Política</Th>
+              <Th>Policy</Th>
               <Th>Status</Th>
-              <Th>Criado</Th>
+              <Th>Created</Th>
             </Tr>
           </THead>
           <tbody>

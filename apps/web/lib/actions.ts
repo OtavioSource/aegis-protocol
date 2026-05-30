@@ -33,7 +33,7 @@ async function run(fn: () => Promise<ActionState>): Promise<ActionState> {
     return await fn();
   } catch (err) {
     if (err instanceof ApiError) return fail(err.message);
-    return fail((err as Error).message || 'Erro inesperado');
+    return fail((err as Error).message || 'Unexpected error');
   }
 }
 
@@ -43,7 +43,7 @@ export async function approveSpend(_: ActionState, fd: FormData): Promise<Action
   return run(async () => {
     const id = str(fd, 'spendRequestId');
     const action = str(fd, 'action'); // APPROVED | REJECTED
-    if (!id || !action) return fail('spendRequestId e action obrigatórios');
+    if (!id || !action) return fail('spendRequestId and action required');
     await api.post(`/v1/approvals/${id}`, {
       action,
       reason: str(fd, 'reason') || undefined,
@@ -51,7 +51,7 @@ export async function approveSpend(_: ActionState, fd: FormData): Promise<Action
     revalidatePath('/approvals');
     revalidatePath('/spend-requests');
     revalidatePath('/');
-    return { ok: true, message: action === 'APPROVED' ? 'Aprovado e executado.' : 'Rejeitado.' };
+    return { ok: true, message: action === 'APPROVED' ? 'Approved and executed.' : 'Rejected.' };
   });
 }
 
@@ -60,7 +60,7 @@ export async function approveSpend(_: ActionState, fd: FormData): Promise<Action
 export async function createSpendRequest(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
     const amountCents = intOrNull(fd, 'amountCents');
-    if (!amountCents || amountCents <= 0) return fail('amountCents deve ser positivo');
+    if (!amountCents || amountCents <= 0) return fail('amountCents must be positive');
     await api.post(
       '/v1/spend-requests',
       {
@@ -74,7 +74,7 @@ export async function createSpendRequest(_: ActionState, fd: FormData): Promise<
     );
     revalidatePath('/spend-requests');
     revalidatePath('/');
-    return { ok: true, message: 'Spend request criada.' };
+    return { ok: true, message: 'Spend request created.' };
   });
 }
 
@@ -83,7 +83,7 @@ export async function createSpendRequest(_: ActionState, fd: FormData): Promise<
 export async function createPolicy(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
     const name = str(fd, 'name');
-    if (!name) return fail('Nome obrigatório');
+    if (!name) return fail('Name required');
     const actionTypes = str(fd, 'actionTypes')
       .split(',')
       .map((s) => s.trim())
@@ -100,7 +100,7 @@ export async function createPolicy(_: ActionState, fd: FormData): Promise<Action
       },
     });
     revalidatePath('/policies');
-    return { ok: true, message: 'Política criada.' };
+    return { ok: true, message: 'Policy created.' };
   });
 }
 
@@ -110,14 +110,14 @@ export async function createAgent(_: ActionState, fd: FormData): Promise<ActionS
   return run(async () => {
     const name = str(fd, 'name');
     const activePolicyId = str(fd, 'activePolicyId');
-    if (!name || !activePolicyId) return fail('Nome e política obrigatórios');
+    if (!name || !activePolicyId) return fail('Name and policy required');
     const created = await api.post<{ apiKey: string }>('/v1/agents', {
       name,
       description: str(fd, 'description') || undefined,
       activePolicyId,
     });
     revalidatePath('/agents');
-    return { ok: true, message: 'Agente criado.', secret: created.apiKey };
+    return { ok: true, message: 'Agent created.', secret: created.apiKey };
   });
 }
 
@@ -126,7 +126,7 @@ export async function createAgent(_: ActionState, fd: FormData): Promise<ActionS
 export async function createVendor(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
     const name = str(fd, 'name');
-    if (!name) return fail('Nome obrigatório');
+    if (!name) return fail('Name required');
     await api.post('/v1/vendors', {
       name,
       description: str(fd, 'description') || undefined,
@@ -134,19 +134,19 @@ export async function createVendor(_: ActionState, fd: FormData): Promise<Action
       sponsorWallet: str(fd, 'sponsorWallet') === 'on',
     });
     revalidatePath('/vendors');
-    return { ok: true, message: 'Vendor criado.' };
+    return { ok: true, message: 'Vendor created.' };
   });
 }
 
 export async function sponsorWallet(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
     const id = str(fd, 'vendorId');
-    if (!id) return fail('vendorId obrigatório');
+    if (!id) return fail('vendorId required');
     const res = await api.post<{ wallet: { publicKey: string } }>(
       `/v1/vendors/${id}/wallets/sponsor`,
     );
     revalidatePath('/vendors');
-    return { ok: true, message: `Wallet sponsoreada: ${res.wallet.publicKey}` };
+    return { ok: true, message: `Wallet sponsored: ${res.wallet.publicKey}` };
   });
 }
 
@@ -158,7 +158,7 @@ export async function initiateDeposit(_: ActionState, fd: FormData): Promise<Act
     if (provider === 'etherfuse') {
       const sourceAmountCents = intOrNull(fd, 'sourceAmountCents');
       if (!sourceAmountCents || sourceAmountCents <= 0) {
-        return fail('sourceAmountCents deve ser positivo');
+        return fail('sourceAmountCents must be positive');
       }
       await api.post('/v1/fiat/deposits', {
         provider: 'etherfuse',
@@ -169,7 +169,7 @@ export async function initiateDeposit(_: ActionState, fd: FormData): Promise<Act
       });
     } else {
       const amountCents = intOrNull(fd, 'amountCents');
-      if (!amountCents || amountCents <= 0) return fail('amountCents deve ser positivo');
+      if (!amountCents || amountCents <= 0) return fail('amountCents must be positive');
       await api.post('/v1/fiat/deposits', {
         provider: 'sep24',
         amountCents,
@@ -177,34 +177,34 @@ export async function initiateDeposit(_: ActionState, fd: FormData): Promise<Act
       });
     }
     revalidatePath('/fiat');
-    return { ok: true, message: 'Deposit iniciado.' };
+    return { ok: true, message: 'Deposit initiated.' };
   });
 }
 
 export async function simulateDeposit(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
     const id = str(fd, 'depositId');
-    if (!id) return fail('depositId obrigatório');
+    if (!id) return fail('depositId required');
     await api.post(`/v1/fiat/deposits/${id}/simulate`);
     revalidatePath('/fiat');
-    return { ok: true, message: 'Pix/SPEI simulado.' };
+    return { ok: true, message: 'Pix/SPEI simulated.' };
   });
 }
 
 export async function refreshDeposit(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
     const id = str(fd, 'depositId');
-    if (!id) return fail('depositId obrigatório');
+    if (!id) return fail('depositId required');
     await api.post(`/v1/fiat/deposits/${id}/refresh`);
     revalidatePath('/fiat');
-    return { ok: true, message: 'Status atualizado.' };
+    return { ok: true, message: 'Status refreshed.' };
   });
 }
 
 export async function initiateWithdrawal(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
     const amountCents = intOrNull(fd, 'amountCents');
-    if (!amountCents || amountCents <= 0) return fail('amountCents deve ser positivo');
+    if (!amountCents || amountCents <= 0) return fail('amountCents must be positive');
     await api.post('/v1/fiat/withdrawals', {
       asset: str(fd, 'asset') || 'USDC',
       assetIdentifier: str(fd, 'assetIdentifier'),
@@ -212,16 +212,16 @@ export async function initiateWithdrawal(_: ActionState, fd: FormData): Promise<
       targetFiat: str(fd, 'targetFiat') || 'BRL',
     });
     revalidatePath('/fiat');
-    return { ok: true, message: 'Withdrawal iniciado (burn submetido).' };
+    return { ok: true, message: 'Withdrawal initiated (burn submitted).' };
   });
 }
 
 export async function refreshWithdrawal(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
     const id = str(fd, 'withdrawalId');
-    if (!id) return fail('withdrawalId obrigatório');
+    if (!id) return fail('withdrawalId required');
     await api.post(`/v1/fiat/withdrawals/${id}/refresh`);
     revalidatePath('/fiat');
-    return { ok: true, message: 'Status atualizado.' };
+    return { ok: true, message: 'Status refreshed.' };
   });
 }

@@ -42,25 +42,25 @@ export default async function FiatPage() {
     <>
       <PageHeader
         title="Fiat ramp"
-        description="On-ramp (fiat → USDC) e off-ramp (USDC → fiat) via Etherfuse — Pix/SPEI."
+        description="On-ramp (fiat → USDC) and off-ramp (USDC → fiat) via Etherfuse — Pix/SPEI."
       />
 
       {/* ----- On-ramp ----- */}
       <div className="mb-4">
-        <SectionCard title="Novo deposit (on-ramp Etherfuse)">
-          <ActionForm action={initiateDeposit} submitLabel="Iniciar deposit">
+        <SectionCard title="New deposit (on-ramp Etherfuse)">
+          <ActionForm action={initiateDeposit} submitLabel="Start deposit">
             <input type="hidden" name="provider" value="etherfuse" />
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Moeda fiat">
+              <Field label="Fiat currency">
                 <Select name="sourceAsset" defaultValue="BRL">
                   <option value="BRL">BRL (Pix)</option>
                   <option value="MXN">MXN (SPEI)</option>
                 </Select>
               </Field>
-              <Field label="Valor fiat (centavos)" hint="2500 = R$ 25,00">
+              <Field label="Fiat amount (cents)" hint="2500 = R$ 25.00">
                 <Input name="sourceAmountCents" type="number" min="1" required placeholder="2500" />
               </Field>
-              <Field label="Asset destino">
+              <Field label="Target asset">
                 <Input name="asset" defaultValue="USDC" />
               </Field>
             </div>
@@ -72,17 +72,17 @@ export default async function FiatPage() {
       </div>
 
       {deposits.data.length === 0 ? (
-        <EmptyState>Nenhum deposit ainda.</EmptyState>
+        <EmptyState>No deposits yet.</EmptyState>
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Data</Th>
+              <Th>Date</Th>
               <Th>Anchor</Th>
               <Th>Asset</Th>
-              <Th>Valor</Th>
+              <Th>Amount</Th>
               <Th>Status</Th>
-              <Th>Ações</Th>
+              <Th>Actions</Th>
             </Tr>
           </THead>
           <tbody>
@@ -101,12 +101,12 @@ export default async function FiatPage() {
                   <Td>
                     <div className="flex gap-2">
                       {etherfuse && !terminal ? (
-                        <ActionForm action={simulateDeposit} submitLabel="Simular Pix" submitVariant="subtle">
+                        <ActionForm action={simulateDeposit} submitLabel="Simulate Pix" submitVariant="subtle">
                           <input type="hidden" name="depositId" value={d.id} />
                         </ActionForm>
                       ) : null}
                       {!terminal ? (
-                        <ActionForm action={refreshDeposit} submitLabel="Atualizar" submitVariant="ghost">
+                        <ActionForm action={refreshDeposit} submitLabel="Refresh" submitVariant="ghost">
                           <input type="hidden" name="depositId" value={d.id} />
                         </ActionForm>
                       ) : null}
@@ -121,16 +121,16 @@ export default async function FiatPage() {
 
       {/* ----- Off-ramp ----- */}
       <div className="mb-4 mt-8">
-        <SectionCard title="Novo withdrawal (off-ramp Etherfuse)">
-          <ActionForm action={initiateWithdrawal} submitLabel="Iniciar withdrawal">
+        <SectionCard title="New withdrawal (off-ramp Etherfuse)">
+          <ActionForm action={initiateWithdrawal} submitLabel="Start withdrawal">
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Asset (saída)">
+              <Field label="Asset (outflow)">
                 <Input name="asset" defaultValue="USDC" />
               </Field>
-              <Field label="Valor (centavos)" hint="175 = 1,75 USDC">
+              <Field label="Amount (cents)" hint="175 = 1.75 USDC">
                 <Input name="amountCents" type="number" min="1" required placeholder="175" />
               </Field>
-              <Field label="Moeda fiat destino">
+              <Field label="Target fiat currency">
                 <Select name="targetFiat" defaultValue="BRL">
                   <option value="BRL">BRL (Pix)</option>
                   <option value="MXN">MXN (SPEI)</option>
@@ -145,18 +145,18 @@ export default async function FiatPage() {
       </div>
 
       {withdrawals.data.length === 0 ? (
-        <EmptyState>Nenhum withdrawal ainda.</EmptyState>
+        <EmptyState>No withdrawals yet.</EmptyState>
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Data</Th>
+              <Th>Date</Th>
               <Th>Asset</Th>
-              <Th>Valor</Th>
+              <Th>Amount</Th>
               <Th>Fiat</Th>
               <Th>Status</Th>
               <Th>Tx</Th>
-              <Th>Ações</Th>
+              <Th>Actions</Th>
             </Tr>
           </THead>
           <tbody>
@@ -187,7 +187,7 @@ export default async function FiatPage() {
                   </Td>
                   <Td>
                     {!terminal ? (
-                      <ActionForm action={refreshWithdrawal} submitLabel="Atualizar" submitVariant="ghost">
+                      <ActionForm action={refreshWithdrawal} submitLabel="Refresh" submitVariant="ghost">
                         <input type="hidden" name="withdrawalId" value={w.id} />
                       </ActionForm>
                     ) : (

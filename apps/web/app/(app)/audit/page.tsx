@@ -20,19 +20,19 @@ export default async function AuditPage() {
   return (
     <>
       <PageHeader
-        title="Auditoria"
-        description="Trilha imutável de eventos. O recibo on-chain (Soroban) entra na iteração 12."
+        title="Audit"
+        description="Immutable trail of decisions and payments — recorded on Soroban."
       />
 
       {audit.data.length === 0 ? (
-        <EmptyState>Nenhum evento de auditoria ainda.</EmptyState>
+        <EmptyState>No audit events yet.</EmptyState>
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Data</Th>
-              <Th>Evento</Th>
-              <Th>Ator</Th>
+              <Th>Date</Th>
+              <Th>Event</Th>
+              <Th>Actor</Th>
               <Th>Payload</Th>
             </Tr>
           </THead>

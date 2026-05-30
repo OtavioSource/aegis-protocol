@@ -6,14 +6,14 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/components/ui';
 
 const LINKS = [
-  { href: '/', label: 'Visão geral' },
+  { href: '/', label: 'Overview' },
   { href: '/spend-requests', label: 'Spend Requests' },
-  { href: '/approvals', label: 'Aprovações' },
-  { href: '/policies', label: 'Políticas' },
-  { href: '/agents', label: 'Agentes' },
+  { href: '/approvals', label: 'Approvals' },
+  { href: '/policies', label: 'Policies' },
+  { href: '/agents', label: 'Agents' },
   { href: '/vendors', label: 'Vendors' },
   { href: '/fiat', label: 'Fiat ramp' },
-  { href: '/audit', label: 'Auditoria' },
+  { href: '/audit', label: 'Audit' },
 ] as const;
 
 export function Nav() {
