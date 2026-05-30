@@ -18,6 +18,7 @@
     "db:reset": "dotenv -e .env.local -- prisma migrate reset",
     "db:push": "dotenv -e .env.local -- prisma db push",
     "db:seed": "dotenv -e .env.local -- prisma db seed",
+    "db:seed:demo": "dotenv -e .env.local -- tsx prisma/seed-demo.ts",
     "db:studio": "dotenv -e .env.local -- prisma studio",
     "db:validate": "dotenv -e .env.local -- prisma validate",
     "setup:treasury": "dotenv -e .env.local -- tsx src/scripts/setup-treasury.ts",
