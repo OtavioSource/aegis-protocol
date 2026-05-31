@@ -5,12 +5,11 @@ import {
   PageHeader,
   Pagination,
   Table,
-  Td,
   Th,
   THead,
   Tr,
 } from '@/components/ui';
-import { AuditPayload } from '@/components/audit-payload';
+import { AuditRow } from '@/components/audit-row';
 import { api } from '@/lib/api';
 import type { Agent, AuditEvent, Listed } from '@/lib/types';
 
@@ -46,7 +45,7 @@ export default async function AuditPage({
     <>
       <PageHeader
         title="Audit"
-        description="Immutable trail of decisions and payments — recorded on Soroban."
+        description="Immutable trail of decisions and payments — recorded on Soroban. Click a row to inspect the payload."
       />
 
       {audit.data.length === 0 ? (
@@ -59,21 +58,17 @@ export default async function AuditPage({
                 <Th>Date</Th>
                 <Th>Event</Th>
                 <Th>Actor</Th>
-                <Th>Payload</Th>
               </Tr>
             </THead>
             <tbody>
               {audit.data.map((e) => (
-                <Tr key={e.id}>
-                  <Td>{fmtDate(e.createdAt)}</Td>
-                  <Td>
-                    <Badge tone="blue">{e.eventType}</Badge>
-                  </Td>
-                  <Td>{actorLabel(e.actor, agentName)}</Td>
-                  <Td>
-                    <AuditPayload payload={e.payload} />
-                  </Td>
-                </Tr>
+                <AuditRow
+                  key={e.id}
+                  date={fmtDate(e.createdAt)}
+                  eventBadge={<Badge tone="blue">{e.eventType}</Badge>}
+                  actorLabel={actorLabel(e.actor, agentName)}
+                  payload={e.payload}
+                />
               ))}
             </tbody>
           </Table>
