@@ -42,7 +42,7 @@ export default async function FiatPage() {
     <>
       <PageHeader
         title="Fiat ramp"
-        description="On-ramp (fiat → USDC) and off-ramp (USDC → fiat) via Etherfuse — Pix/SPEI."
+        description="Move money between fiat currencies (BRL, MXN) and the USDC treasury via the Etherfuse anchor. Deposit fiat to fund the treasury; withdraw USDC to send fiat back to a bank account."
       />
 
       {/* ----- On-ramp ----- */}

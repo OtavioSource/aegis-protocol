@@ -10,12 +10,22 @@ import {
   THead,
   Tr,
 } from '@/components/ui';
+import { AuditPayload } from '@/components/audit-payload';
 import { api } from '@/lib/api';
-import type { AuditEvent, Listed } from '@/lib/types';
+import type { Agent, AuditEvent, Listed } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 20;
+
+function actorLabel(actor: string, agentName: Map<string, string>): string {
+  if (actor.startsWith('agent:')) {
+    return agentName.get(actor.slice(6)) ?? `Agent (${actor.slice(6, 14)}…)`;
+  }
+  if (actor.startsWith('user:')) return 'Human approver';
+  if (actor === 'system') return 'System';
+  return actor;
+}
 
 export default async function AuditPage({
   searchParams,
@@ -26,9 +36,11 @@ export default async function AuditPage({
   const page = Math.max(1, parseInt(pageParam ?? '1', 10) || 1);
   const skip = (page - 1) * PAGE_SIZE;
 
-  const audit = await api.get<Listed<AuditEvent>>(
-    `/v1/audit?limit=${PAGE_SIZE}&skip=${skip}`,
-  );
+  const [audit, agents] = await Promise.all([
+    api.get<Listed<AuditEvent>>(`/v1/audit?limit=${PAGE_SIZE}&skip=${skip}`),
+    api.get<Listed<Agent>>('/v1/agents'),
+  ]);
+  const agentName = new Map(agents.data.map((a) => [a.id, a.name]));
 
   return (
     <>
@@ -57,13 +69,9 @@ export default async function AuditPage({
                   <Td>
                     <Badge tone="blue">{e.eventType}</Badge>
                   </Td>
+                  <Td>{actorLabel(e.actor, agentName)}</Td>
                   <Td>
-                    <code className="text-xs text-slate-400">{e.actor}</code>
-                  </Td>
-                  <Td>
-                    <code className="block max-w-md truncate text-xs text-slate-500">
-                      {JSON.stringify(e.payload)}
-                    </code>
+                    <AuditPayload payload={e.payload} />
                   </Td>
                 </Tr>
               ))}

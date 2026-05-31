@@ -1,6 +1,7 @@
 import { ExternalLink } from 'lucide-react';
 
 import { ActionForm } from '@/components/action-form';
+import { InfoTooltip } from '@/components/info-tooltip';
 import {
   Badge,
   EmptyState,
@@ -52,11 +53,26 @@ export default async function SpendRequestsPage() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Action type" hint="e.g. api-call, compute">
+              <Field
+                label={
+                  <span className="inline-flex items-center gap-1">
+                    Action type
+                    <InfoTooltip text="A label classifying what this spend is for. Must match one of the action types allowed by the agent's active policy (e.g. api-call, compute, scraping)." />
+                  </span>
+                }
+                hint="e.g. api-call, compute"
+              >
                 <Input name="actionType" required placeholder="api-call" />
               </Field>
-              <Field label="Amount (cents)" hint="100 = $1.00">
-                <Input name="amountCents" type="number" min="1" required placeholder="100" />
+              <Field label="Amount ($)" hint="e.g. 5.00">
+                <Input
+                  name="amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  placeholder="5.00"
+                />
               </Field>
               <Field label="Asset">
                 <Input name="asset" defaultValue="USDC" />

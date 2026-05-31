@@ -24,6 +24,15 @@ function intOrNull(fd: FormData, key: string): number | null {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 }
 
+/** Converte valor em dólares (string como "50" ou "12.34") para centavos arredondados. */
+function dollarsToCents(fd: FormData, key: string): number | null {
+  const v = str(fd, key);
+  if (v === '') return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n * 100);
+}
+
 function fail(message: string): ActionState {
   return { ok: false, message };
 }
@@ -59,8 +68,8 @@ export async function approveSpend(_: ActionState, fd: FormData): Promise<Action
 
 export async function createSpendRequest(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
-    const amountCents = intOrNull(fd, 'amountCents');
-    if (!amountCents || amountCents <= 0) return fail('amountCents must be positive');
+    const amountCents = dollarsToCents(fd, 'amount');
+    if (!amountCents || amountCents <= 0) return fail('Amount must be positive');
     await api.post(
       '/v1/spend-requests',
       {
@@ -91,9 +100,9 @@ export async function createPolicy(_: ActionState, fd: FormData): Promise<Action
     await api.post('/v1/policies', {
       name,
       rules: {
-        maxPerTransactionCents: intOrNull(fd, 'maxPerTransactionCents'),
-        monthlyBudgetCents: intOrNull(fd, 'monthlyBudgetCents'),
-        humanApprovalThresholdCents: intOrNull(fd, 'humanApprovalThresholdCents'),
+        maxPerTransactionCents: dollarsToCents(fd, 'maxPerTransaction'),
+        monthlyBudgetCents: dollarsToCents(fd, 'monthlyBudget'),
+        humanApprovalThresholdCents: dollarsToCents(fd, 'humanApprovalThreshold'),
         vendorAllowList: [],
         vendorDenyList: [],
         actionTypes,

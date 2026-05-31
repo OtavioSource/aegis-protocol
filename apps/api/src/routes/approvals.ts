@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 import { env } from '../env.js';
 import { ConflictError, NotFoundError } from '../lib/errors.js';
+import { ensureTreasuryBalance } from '../lib/treasury-guard.js';
 import { executeSpendRequestPayment } from '../services/payment-executor.js';
 import { serializeSpendRequest } from '../services/spend-request.js';
 
@@ -43,6 +44,15 @@ const approvalsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         throw new ConflictError(
           `SpendRequest ${sr.id} is in status ${sr.status}; only REQUIRES_APPROVAL can be approved/rejected.`,
         );
+      }
+
+      // Pre-check de saldo (apenas para APPROVED — rejeitar não consome).
+      // Falha antes de criar a Approval pra evitar estado APPROVED_BY_HUMAN + EXECUTION_FAILED.
+      if (body.action === ApprovalAction.APPROVED) {
+        const balanceCheck = await ensureTreasuryBalance(app, sr.asset, Number(sr.amountCents));
+        if (!balanceCheck.ok) {
+          throw new ConflictError(balanceCheck.reason);
+        }
       }
 
       // Determinar novo status

@@ -1,4 +1,5 @@
 import { ActionForm } from '@/components/action-form';
+import { InfoTooltip } from '@/components/info-tooltip';
 import {
   Badge,
   EmptyState,
@@ -37,22 +38,43 @@ export default async function PoliciesPage() {
               <Input name="name" required placeholder="Conservative Policy" />
             </Field>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Max per transaction (¢)" hint="empty = no limit">
-                <Input name="maxPerTransactionCents" type="number" min="0" placeholder="50000" />
-              </Field>
-              <Field label="Monthly budget (¢)" hint="empty = no limit">
-                <Input name="monthlyBudgetCents" type="number" min="0" placeholder="5000000" />
-              </Field>
-              <Field label="Approval threshold (¢)" hint="above → human">
+              <Field label="Max per transaction ($)" hint="empty = no limit">
                 <Input
-                  name="humanApprovalThresholdCents"
+                  name="maxPerTransaction"
                   type="number"
+                  step="0.01"
                   min="0"
-                  placeholder="10000"
+                  placeholder="500.00"
+                />
+              </Field>
+              <Field label="Monthly budget ($)" hint="empty = no limit">
+                <Input
+                  name="monthlyBudget"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="50000.00"
+                />
+              </Field>
+              <Field label="Approval threshold ($)" hint="above → human approval">
+                <Input
+                  name="humanApprovalThreshold"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="100.00"
                 />
               </Field>
             </div>
-            <Field label="Allowed action types" hint="comma-separated; empty = all">
+            <Field
+              label={
+                <span className="inline-flex items-center gap-1">
+                  Allowed action types
+                  <InfoTooltip text="Labels declared by agents when submitting a spend request (e.g. api-call, compute, scraping). The policy only allows spend requests whose action type is in this list. Leave empty to allow any." />
+                </span>
+              }
+              hint="comma-separated; empty = all"
+            >
               <Input name="actionTypes" placeholder="api-call, compute, scraping" />
             </Field>
           </ActionForm>

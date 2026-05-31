@@ -47,15 +47,17 @@ export function StatCard({
   hint,
   icon,
   valueClassName,
+  href,
 }: {
   label: string;
   value: ReactNode;
   hint?: string;
   icon?: ReactNode;
   valueClassName?: string;
+  href?: string;
 }) {
-  return (
-    <Card>
+  const inner = (
+    <>
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</p>
         {icon ? (
@@ -68,8 +70,21 @@ export function StatCard({
         {value}
       </p>
       {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
-    </Card>
+    </>
   );
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        className="block rounded-xl border border-ink-700 bg-ink-850 p-5 transition-colors hover:border-accent/40 hover:bg-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+      >
+        {inner}
+      </a>
+    );
+  }
+
+  return <Card>{inner}</Card>;
 }
 
 export function PageHeader({
@@ -226,7 +241,7 @@ export function Field({
   hint,
   children,
 }: {
-  label: string;
+  label: ReactNode;
   hint?: string;
   children: ReactNode;
 }) {
@@ -311,13 +326,14 @@ export function Pagination({
 
 // ----------------------------------------------------------------- format ----
 
-/** Centavos → string monetária ("1234" → "12.34"). */
+/** Centavos → string monetária com símbolo ("1234" → "$12.34"). */
 export function fmtCents(cents: number | null | undefined): string {
   if (cents === null || cents === undefined) return '—';
-  return (cents / 100).toLocaleString('en-US', {
+  const formatted = (cents / 100).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+  return `$${formatted}`;
 }
 
 export function fmtDate(iso: string | null | undefined): string {

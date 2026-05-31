@@ -75,21 +75,25 @@ export default async function OverviewPage() {
               hint="awaiting human decision"
               icon={<Clock size={15} />}
               valueClassName={hasPending ? 'text-amber-300' : 'text-slate-100'}
+              href="/approvals"
             />
             <StatCard
               label="Spend requests"
               value={spend.data.length}
               icon={<Receipt size={15} />}
+              href="/spend-requests"
             />
             <StatCard
               label="Vendors"
               value={vendors.data.length}
               icon={<Building2 size={15} />}
+              href="/vendors"
             />
             <StatCard
               label="Agents"
               value={agents.data.length}
               icon={<Bot size={15} />}
+              href="/agents"
             />
           </div>
         </div>

@@ -28,6 +28,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 
 import { NotFoundError } from '../lib/errors.js';
+import { ensureTreasuryBalance } from '../lib/treasury-guard.js';
 import { emitSorobanAuditEvent } from './soroban-audit.js';
 
 export interface ExecutePaymentInput {
@@ -96,7 +97,13 @@ export async function executeSpendRequestPayment(
     );
   }
 
-  // 3. Memo: sha256(spendRequestId) — backup off-chain do recibo
+  // 3. Pre-check: saldo suficiente na treasury (evita propagar erro genérico do Horizon).
+  const balanceCheck = await ensureTreasuryBalance(app, sr.asset, Number(sr.amountCents));
+  if (!balanceCheck.ok) {
+    return await markFailed(prisma, app, sr, balanceCheck.reason);
+  }
+
+  // 4. Memo: sha256(spendRequestId) — backup off-chain do recibo
   const memoHash = createHash('sha256').update(spendRequestId).digest();
 
   // 4. Submeter on-chain

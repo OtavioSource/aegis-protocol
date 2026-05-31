@@ -1,4 +1,5 @@
 import { ActionForm } from '@/components/action-form';
+import { InfoTooltip } from '@/components/info-tooltip';
 import {
   Badge,
   EmptyState,
@@ -50,7 +51,8 @@ export default async function VendorsPage() {
             </Field>
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input type="checkbox" name="sponsorWallet" className="accent-accent" />
-              Sponsor wallet on-chain now (CAP-33)
+              Sponsor wallet on-chain now
+              <InfoTooltip text="Aegis creates the vendor's Stellar account and opens the USDC trustline on-chain, paying the base reserves for them. The vendor never needs to hold XLM or interact with the blockchain. (Stellar CAP-33.)" />
             </label>
           </ActionForm>
         </SectionCard>
