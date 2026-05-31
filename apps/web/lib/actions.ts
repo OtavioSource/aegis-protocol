@@ -70,10 +70,12 @@ export async function createSpendRequest(_: ActionState, fd: FormData): Promise<
   return run(async () => {
     const amountCents = dollarsToCents(fd, 'amount');
     if (!amountCents || amountCents <= 0) return fail('Amount must be positive');
+    const agentId = str(fd, 'agentId') || undefined;
     await api.post(
       '/v1/spend-requests',
       {
         vendorId: str(fd, 'vendorId'),
+        ...(agentId ? { agentId } : {}),
         amountCents,
         asset: str(fd, 'asset') || 'USDC',
         actionType: str(fd, 'actionType'),

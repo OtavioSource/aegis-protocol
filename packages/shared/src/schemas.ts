@@ -45,6 +45,13 @@ export const PolicySchema = z.object({
  */
 export const SpendRequestInputSchema = z.object({
   vendorId: z.string().uuid(),
+  /**
+   * Opcional: agente "em nome de quem" o spend é submetido. Usado pelo dashboard,
+   * que autentica com uma service key e precisa atribuir o spend a um agent
+   * específico escolhido na UI. Se omitido, o agent do Bearer token é usado.
+   * Só é aceito se pertencer à mesma Company do caller.
+   */
+  agentId: z.string().uuid().optional(),
   amountCents: z.number().int().positive(),
   /** Asset code curto: "USDC", "EURC", "BRL", "XLM", etc. */
   asset: z

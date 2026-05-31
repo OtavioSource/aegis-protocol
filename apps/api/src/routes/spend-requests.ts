@@ -22,7 +22,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { env } from '../env.js';
-import { NotFoundError, PolicyRejectedError } from '../lib/errors.js';
+import { NotFoundError, PolicyRejectedError, ValidationError } from '../lib/errors.js';
 import { extractIdempotencyKey } from '../lib/idempotency.js';
 import { executeSpendRequestPayment } from '../services/payment-executor.js';
 import { emitSorobanAuditEvent } from '../services/soroban-audit.js';
@@ -30,6 +30,7 @@ import {
   createSpendRequest,
   serializeSpendRequest,
 } from '../services/spend-request.js';
+import { AgentStatus } from '@prisma/client';
 
 const ListQuery = z.object({
   status: z.nativeEnum(SpendRequestStatus).optional(),
@@ -41,11 +42,31 @@ const ListQuery = z.object({
 const spendRequestsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   // ----- POST /v1/spend-requests -----
   app.post('/v1/spend-requests', async (request, reply) => {
-    const agent = request.requireAgent();
+    const caller = request.requireAgent();
     const idempotencyKey = extractIdempotencyKey(
       request.headers['idempotency-key'] as string | undefined,
     );
     const body: SpendRequestInput = SpendRequestInputSchema.parse(request.body);
+
+    // Resolve which Agent the spend is submitted on behalf of.
+    // - Default: the caller (Bearer token's Agent).
+    // - If body.agentId is set, swap to that Agent — only if it belongs to the
+    //   same Company and is ACTIVE. This is the dashboard's "act as agent" flow.
+    let agent = caller;
+    if (body.agentId && body.agentId !== caller.id) {
+      const target = await app.prisma.agent.findFirst({
+        where: { id: body.agentId, companyId: caller.companyId },
+      });
+      if (!target) {
+        throw new ValidationError(`Agent ${body.agentId} not found in this Company.`);
+      }
+      if (target.status !== AgentStatus.ACTIVE) {
+        throw new ValidationError(
+          `Agent ${target.id} is ${target.status}; cannot submit spend requests.`,
+        );
+      }
+      agent = target;
+    }
 
     const { spendRequest, reused } = await createSpendRequest(app.prisma, {
       agent,

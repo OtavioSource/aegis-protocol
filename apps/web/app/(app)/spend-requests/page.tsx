@@ -21,16 +21,18 @@ import {
 } from '@/components/ui';
 import { createSpendRequest } from '@/lib/actions';
 import { api } from '@/lib/api';
-import type { Listed, SpendRequest, Vendor } from '@/lib/types';
+import type { Agent, Listed, SpendRequest, Vendor } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SpendRequestsPage() {
-  const [spend, vendors] = await Promise.all([
+  const [spend, vendors, agents] = await Promise.all([
     api.get<Listed<SpendRequest>>('/v1/spend-requests?limit=200'),
     api.get<Listed<Vendor>>('/v1/vendors'),
+    api.get<Listed<Agent>>('/v1/agents'),
   ]);
   const vendorName = new Map(vendors.data.map((v) => [v.id, v.name]));
+  const activeAgents = agents.data.filter((a) => a.status === 'ACTIVE');
 
   return (
     <>
@@ -43,6 +45,23 @@ export default async function SpendRequestsPage() {
         <SectionCard title="New spend request">
           <ActionForm action={createSpendRequest} submitLabel="Create">
             <div className="grid grid-cols-2 gap-3">
+              <Field
+                label={
+                  <span className="inline-flex items-center gap-1">
+                    Agent
+                    <InfoTooltip text="The agent submitting this spend request. The spend will be evaluated against this agent's active policy and attributed to it in the audit trail." />
+                  </span>
+                }
+              >
+                <Select name="agentId" required>
+                  <option value="">Select…</option>
+                  {activeAgents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
               <Field label="Vendor">
                 <Select name="vendorId" required>
                   <option value="">Select…</option>
