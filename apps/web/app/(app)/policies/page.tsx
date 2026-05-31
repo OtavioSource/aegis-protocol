@@ -15,7 +15,7 @@ import {
   THead,
   Tr,
 } from '@/components/ui';
-import { createPolicy } from '@/lib/actions';
+import { createPolicy, togglePolicy } from '@/lib/actions';
 import { api } from '@/lib/api';
 import type { Listed, Policy } from '@/lib/types';
 
@@ -95,6 +95,7 @@ export default async function PoliciesPage() {
               <Th>Action types</Th>
               <Th>State</Th>
               <Th>Created</Th>
+              <Th>Action</Th>
             </Tr>
           </THead>
           <tbody>
@@ -110,6 +111,16 @@ export default async function PoliciesPage() {
                   {p.isActive ? <Badge tone="green">active</Badge> : <Badge tone="gray">inactive</Badge>}
                 </Td>
                 <Td>{fmtDate(p.createdAt)}</Td>
+                <Td>
+                  <ActionForm
+                    action={togglePolicy}
+                    submitLabel={p.isActive ? 'Deactivate' : 'Activate'}
+                    submitVariant={p.isActive ? 'danger' : 'subtle'}
+                  >
+                    <input type="hidden" name="policyId" value={p.id} />
+                    <input type="hidden" name="isActive" value={p.isActive ? 'false' : 'true'} />
+                  </ActionForm>
+                </Td>
               </Tr>
             ))}
           </tbody>

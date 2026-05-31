@@ -23,6 +23,11 @@ const NewVersionBody = z.object({
   rules: PolicyRulesSchema,
 });
 
+const PatchPolicyBody = z.object({
+  /** Apenas toggle ativo/inativo. Conteúdo (rules) é imutável — use new-version. */
+  isActive: z.boolean(),
+});
+
 const policiesRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   // ----- LIST (apenas active por default; ?all=true para histórico) -----
   app.get<{ Querystring: { all?: string } }>('/v1/policies', async (request) => {
@@ -96,6 +101,23 @@ const policiesRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     reply.code(201);
     return newPolicy;
+  });
+
+  // ----- PATCH (toggle isActive; conteúdo segue imutável) -----
+  app.patch<{ Params: { id: string } }>('/v1/policies/:id', async (request) => {
+    const caller = request.requireAgent();
+    const body = PatchPolicyBody.parse(request.body);
+
+    const existing = await app.prisma.policy.findFirst({
+      where: { id: request.params.id, companyId: caller.companyId },
+    });
+    if (!existing) throw new NotFoundError(`Policy ${request.params.id} not found`);
+
+    const updated = await app.prisma.policy.update({
+      where: { id: existing.id },
+      data: { isActive: body.isActive },
+    });
+    return updated;
   });
 };
 

@@ -159,6 +159,41 @@ export async function sponsorWallet(_: ActionState, fd: FormData): Promise<Actio
   });
 }
 
+// ---------------------------------------------------- policy lifecycle ----
+
+export async function togglePolicy(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = str(fd, 'policyId');
+    const isActive = str(fd, 'isActive') === 'true';
+    if (!id) return fail('policyId required');
+    await api.patch(`/v1/policies/${id}`, { isActive });
+    revalidatePath('/policies');
+    return { ok: true, message: isActive ? 'Policy activated.' : 'Policy deactivated.' };
+  });
+}
+
+// ----------------------------------------------------- agent lifecycle ----
+
+export async function revokeAgent(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = str(fd, 'agentId');
+    if (!id) return fail('agentId required');
+    await api.del(`/v1/agents/${id}`);
+    revalidatePath('/agents');
+    return { ok: true, message: 'Agent revoked.' };
+  });
+}
+
+export async function rotateAgentKey(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = str(fd, 'agentId');
+    if (!id) return fail('agentId required');
+    const res = await api.post<{ apiKey: string }>(`/v1/agents/${id}/rotate-key`);
+    revalidatePath('/agents');
+    return { ok: true, message: 'API key rotated.', secret: res.apiKey };
+  });
+}
+
 // ---------------------------------------------------------------- fiat ----
 
 export async function initiateDeposit(_: ActionState, fd: FormData): Promise<ActionState> {

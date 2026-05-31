@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { ActionForm } from '@/components/action-form';
 import {
   EmptyState,
@@ -14,7 +16,7 @@ import {
   THead,
   Tr,
 } from '@/components/ui';
-import { createAgent } from '@/lib/actions';
+import { createAgent, revokeAgent, rotateAgentKey } from '@/lib/actions';
 import { api } from '@/lib/api';
 import type { Agent, Listed, Policy } from '@/lib/types';
 
@@ -70,22 +72,55 @@ export default async function AgentsPage() {
               <Th>Policy</Th>
               <Th>Status</Th>
               <Th>Created</Th>
+              <Th>Actions</Th>
             </Tr>
           </THead>
           <tbody>
-            {agents.data.map((a) => (
-              <Tr key={a.id}>
-                <Td>{a.name}</Td>
-                <Td>
-                  <code className="text-xs text-slate-400">{a.apiKeyPrefix}…</code>
-                </Td>
-                <Td>{policyName.get(a.activePolicyId) ?? a.activePolicyId}</Td>
-                <Td>
-                  <StatusBadge status={a.status} />
-                </Td>
-                <Td>{fmtDate(a.createdAt)}</Td>
-              </Tr>
-            ))}
+            {agents.data.map((a) => {
+              const revoked = a.status === 'REVOKED';
+              return (
+                <Tr key={a.id}>
+                  <Td>
+                    <Link
+                      href={`/agents/${a.id}`}
+                      className="text-accent transition-colors hover:text-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                    >
+                      {a.name}
+                    </Link>
+                  </Td>
+                  <Td>
+                    <code className="text-xs text-slate-400">{a.apiKeyPrefix}…</code>
+                  </Td>
+                  <Td>{policyName.get(a.activePolicyId) ?? a.activePolicyId}</Td>
+                  <Td>
+                    <StatusBadge status={a.status} />
+                  </Td>
+                  <Td>{fmtDate(a.createdAt)}</Td>
+                  <Td>
+                    {revoked ? (
+                      '—'
+                    ) : (
+                      <div className="flex gap-2">
+                        <ActionForm
+                          action={rotateAgentKey}
+                          submitLabel="Rotate key"
+                          submitVariant="subtle"
+                        >
+                          <input type="hidden" name="agentId" value={a.id} />
+                        </ActionForm>
+                        <ActionForm
+                          action={revokeAgent}
+                          submitLabel="Revoke"
+                          submitVariant="danger"
+                        >
+                          <input type="hidden" name="agentId" value={a.id} />
+                        </ActionForm>
+                      </div>
+                    )}
+                  </Td>
+                </Tr>
+              );
+            })}
           </tbody>
         </Table>
       )}
