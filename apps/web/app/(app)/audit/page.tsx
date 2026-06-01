@@ -68,6 +68,7 @@ export default async function AuditPage({
                   eventBadge={<Badge tone="blue">{e.eventType}</Badge>}
                   actorLabel={actorLabel(e.actor, agentName)}
                   payload={e.payload}
+                  sorobanTxHash={e.sorobanTxHash}
                 />
               ))}
             </tbody>
