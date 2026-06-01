@@ -159,6 +159,14 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         ...(body.metadata !== undefined ? { metadata: body.metadata as object } : {}),
       },
     });
+    // Invalida cache de auth se status mudou para algo que não seja ACTIVE,
+    // OU se a policy mudou (cache guarda activePolicyId antigo).
+    if (
+      (body.status !== undefined && body.status !== AgentStatus.ACTIVE) ||
+      body.activePolicyId !== undefined
+    ) {
+      app.invalidateAgentCache(existing.id);
+    }
     return publicAgent(updated);
   });
 
@@ -177,6 +185,9 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       where: { id: request.params.id },
       data: { apiKeyHash, apiKeyPrefix: prefix },
     });
+    // Invalida cache: a key anterior continua hashed no LRU até o TTL, ainda
+    // funcional. Invalidar fecha a janela em que ambas as keys autenticam.
+    app.invalidateAgentCache(existing.id);
     return { ...publicAgent(updated), apiKey };
   });
 
@@ -192,6 +203,9 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       where: { id: request.params.id },
       data: { status: AgentStatus.REVOKED, revokedAt: new Date() },
     });
+    // Crítico: invalida o cache do auth-agent. Sem isso, uma API key vazada
+    // continuaria válida por até CACHE_TTL_MS após revogação.
+    app.invalidateAgentCache(existing.id);
     reply.code(204);
   });
 };
