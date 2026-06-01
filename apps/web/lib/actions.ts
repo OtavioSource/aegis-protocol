@@ -37,12 +37,25 @@ function fail(message: string): ActionState {
   return { ok: false, message };
 }
 
-async function run(fn: () => Promise<ActionState>): Promise<ActionState> {
+/**
+ * Executa o action e SEMPRE revalida os paths fornecidos — mesmo quando a API
+ * retorna erro. Caso típico: a API criou um SpendRequest com status REJECTED
+ * antes de lançar 422 (PolicyRejectedError); precisamos refletir esse registro
+ * no histórico imediatamente, sem exigir F5.
+ */
+async function run(
+  fn: () => Promise<ActionState>,
+  revalidatePaths: string[] = [],
+): Promise<ActionState> {
   try {
     return await fn();
   } catch (err) {
     if (err instanceof ApiError) return fail(err.message);
     return fail((err as Error).message || 'Unexpected error');
+  } finally {
+    for (const p of revalidatePaths) {
+      revalidatePath(p);
+    }
   }
 }
 
@@ -57,36 +70,36 @@ export async function approveSpend(_: ActionState, fd: FormData): Promise<Action
       action,
       reason: str(fd, 'reason') || undefined,
     });
-    revalidatePath('/approvals');
-    revalidatePath('/spend-requests');
-    revalidatePath('/');
     return { ok: true, message: action === 'APPROVED' ? 'Approved and executed.' : 'Rejected.' };
-  });
+  }, ['/approvals', '/spend-requests', '/']);
 }
 
 // ------------------------------------------------------- spend requests ----
 
 export async function createSpendRequest(_: ActionState, fd: FormData): Promise<ActionState> {
-  return run(async () => {
-    const amountCents = dollarsToCents(fd, 'amount');
-    if (!amountCents || amountCents <= 0) return fail('Amount must be positive');
-    const agentId = str(fd, 'agentId') || undefined;
-    await api.post(
-      '/v1/spend-requests',
-      {
-        vendorId: str(fd, 'vendorId'),
-        ...(agentId ? { agentId } : {}),
-        amountCents,
-        asset: str(fd, 'asset') || 'USDC',
-        actionType: str(fd, 'actionType'),
-        reason: str(fd, 'reason') || undefined,
-      },
-      { 'Idempotency-Key': randomUUID() },
-    );
-    revalidatePath('/spend-requests');
-    revalidatePath('/');
-    return { ok: true, message: 'Spend request created.' };
-  });
+  return run(
+    async () => {
+      const amountCents = dollarsToCents(fd, 'amount');
+      if (!amountCents || amountCents <= 0) return fail('Amount must be positive');
+      const agentId = str(fd, 'agentId') || undefined;
+      await api.post(
+        '/v1/spend-requests',
+        {
+          vendorId: str(fd, 'vendorId'),
+          ...(agentId ? { agentId } : {}),
+          amountCents,
+          asset: str(fd, 'asset') || 'USDC',
+          actionType: str(fd, 'actionType'),
+          reason: str(fd, 'reason') || undefined,
+        },
+        { 'Idempotency-Key': randomUUID() },
+      );
+      return { ok: true, message: 'Spend request created.' };
+    },
+    // Sempre revalida — inclusive em falhas como PolicyRejected, que cria
+    // registro no banco com status REJECTED antes de retornar 422.
+    ['/spend-requests', '/', '/audit'],
+  );
 }
 
 // ------------------------------------------------------------ policies ----
