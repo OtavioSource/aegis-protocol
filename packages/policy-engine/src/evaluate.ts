@@ -29,18 +29,25 @@ import {
   type SpendRequestInput,
 } from '@aegis/shared';
 
+/** Centavos → string monetária com símbolo (5000 → "$50.00"). */
+function fmt(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
 export function evaluate(
   request: SpendRequestInput,
   policy: Policy,
   context: RuntimeContext,
 ): Decision {
   const r = policy.rules;
+  const pol = `policy "${policy.name}" v${policy.version}`;
 
   // 1. actionType permitido?
   if (r.actionTypes.length > 0 && !r.actionTypes.includes(request.actionType)) {
+    const allowed = r.actionTypes.join(', ');
     return {
       decision: DecisionType.REJECTED,
-      reason: `actionType '${request.actionType}' not in policy.actionTypes`,
+      reason: `Action type "${request.actionType}" is not allowed by ${pol}. Allowed: ${allowed}.`,
       ruleHit: PolicyRuleName.ACTION_TYPES,
     };
   }
@@ -49,7 +56,7 @@ export function evaluate(
   if (r.vendorDenyList.includes(request.vendorId)) {
     return {
       decision: DecisionType.REJECTED,
-      reason: `vendor ${request.vendorId} is in denyList`,
+      reason: `Vendor is on the deny list of ${pol}.`,
       ruleHit: PolicyRuleName.VENDOR_DENY_LIST,
     };
   }
@@ -58,7 +65,7 @@ export function evaluate(
   if (r.vendorAllowList.length > 0 && !r.vendorAllowList.includes(request.vendorId)) {
     return {
       decision: DecisionType.REJECTED,
-      reason: `vendor ${request.vendorId} not in allowList`,
+      reason: `Vendor is not on the allow list of ${pol}.`,
       ruleHit: PolicyRuleName.VENDOR_ALLOW_LIST,
     };
   }
@@ -67,7 +74,7 @@ export function evaluate(
   if (r.maxPerTransactionCents !== null && request.amountCents > r.maxPerTransactionCents) {
     return {
       decision: DecisionType.REJECTED,
-      reason: `amount ${request.amountCents} exceeds maxPerTransactionCents ${r.maxPerTransactionCents}`,
+      reason: `Amount ${fmt(request.amountCents)} exceeds max per transaction (${fmt(r.maxPerTransactionCents)}) of ${pol}.`,
       ruleHit: PolicyRuleName.MAX_PER_TRANSACTION_CENTS,
     };
   }
@@ -78,7 +85,7 @@ export function evaluate(
     if (wouldSpend > r.monthlyBudgetCents) {
       return {
         decision: DecisionType.REJECTED,
-        reason: `would spend ${wouldSpend} exceeds monthlyBudgetCents ${r.monthlyBudgetCents}`,
+        reason: `Monthly spend would reach ${fmt(wouldSpend)} (${fmt(context.monthlySpentCents)} already spent + ${fmt(request.amountCents)} requested), exceeding the budget of ${fmt(r.monthlyBudgetCents)} set by ${pol}.`,
         ruleHit: PolicyRuleName.MONTHLY_BUDGET_CENTS,
       };
     }
@@ -91,7 +98,7 @@ export function evaluate(
   ) {
     return {
       decision: DecisionType.REQUIRES_APPROVAL,
-      reason: `amount ${request.amountCents} >= humanApprovalThresholdCents ${r.humanApprovalThresholdCents}`,
+      reason: `Amount ${fmt(request.amountCents)} reaches the approval threshold (${fmt(r.humanApprovalThresholdCents)}) of ${pol}. Human approval required.`,
       ruleHit: PolicyRuleName.HUMAN_APPROVAL_THRESHOLD_CENTS,
     };
   }
