@@ -1,13 +1,17 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
+import { ActionForm } from '@/components/action-form';
 import {
   Badge,
   EmptyState,
+  Field,
   fmtCents,
   fmtDate,
+  Input,
   PageHeader,
   SectionCard,
+  Select,
   StatusBadge,
   Table,
   Td,
@@ -15,6 +19,7 @@ import {
   THead,
   Tr,
 } from '@/components/ui';
+import { updateAgent } from '@/lib/actions';
 import { api, ApiError } from '@/lib/api';
 import type { Agent, Listed, Policy, SpendRequest, Vendor } from '@/lib/types';
 
@@ -111,6 +116,36 @@ export default async function AgentDetailPage({
           ) : null}
         </dl>
       </SectionCard>
+
+      {agent.status !== 'REVOKED' ? (
+        <div className="mt-6">
+          <SectionCard title="Edit agent">
+            <ActionForm action={updateAgent} submitLabel="Save changes">
+              <input type="hidden" name="agentId" value={agent.id} />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Name">
+                  <Input name="name" defaultValue={agent.name} required />
+                </Field>
+                <Field label="Active policy">
+                  <Select name="activePolicyId" defaultValue={agent.activePolicyId} required>
+                    {policies.data
+                      .filter((p) => p.isActive || p.id === agent.activePolicyId)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} v{p.version}
+                          {p.isActive ? '' : ' (inactive)'}
+                        </option>
+                      ))}
+                  </Select>
+                </Field>
+              </div>
+              <Field label="Description">
+                <Input name="description" defaultValue={agent.description ?? ''} />
+              </Field>
+            </ActionForm>
+          </SectionCard>
+        </div>
+      ) : null}
 
       <h2 className="mb-3 mt-8 text-sm font-semibold text-slate-100">Spend summary</h2>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

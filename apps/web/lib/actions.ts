@@ -95,9 +95,11 @@ export async function createPolicy(_: ActionState, fd: FormData): Promise<Action
   return run(async () => {
     const name = str(fd, 'name');
     if (!name) return fail('Name required');
+    // Tolerant parser: accept comma, semicolon, or any whitespace as separator,
+    // and strip trailing periods (e.g. "api-call. compute" → ["api-call", "compute"]).
     const actionTypes = str(fd, 'actionTypes')
-      .split(',')
-      .map((s) => s.trim())
+      .split(/[,;\s]+/)
+      .map((s) => s.trim().replace(/^\.+|\.+$/g, ''))
       .filter(Boolean);
     await api.post('/v1/policies', {
       name,
@@ -193,6 +195,25 @@ export async function rotateAgentKey(_: ActionState, fd: FormData): Promise<Acti
     const res = await api.post<{ apiKey: string }>(`/v1/agents/${id}/rotate-key`);
     revalidatePath('/agents');
     return { ok: true, message: 'API key rotated.', secret: res.apiKey };
+  });
+}
+
+export async function updateAgent(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = str(fd, 'agentId');
+    if (!id) return fail('agentId required');
+    const patch: Record<string, unknown> = {};
+    const name = str(fd, 'name');
+    if (name) patch.name = name;
+    const description = str(fd, 'description');
+    // empty string clears the description (API accepts null)
+    patch.description = description || null;
+    const activePolicyId = str(fd, 'activePolicyId');
+    if (activePolicyId) patch.activePolicyId = activePolicyId;
+    await api.patch(`/v1/agents/${id}`, patch);
+    revalidatePath('/agents');
+    revalidatePath(`/agents/${id}`);
+    return { ok: true, message: 'Agent updated.' };
   });
 }
 
