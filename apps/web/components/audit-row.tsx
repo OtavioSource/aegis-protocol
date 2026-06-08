@@ -56,7 +56,7 @@ export function AuditRow({
                 title="Recorded on Soroban (Stellar smart contract)"
               >
                 <CheckCircle2 size={10} aria-hidden="true" />
-                on-chain-test
+                on-chain
               </span>
             ) : null}
           </span>
