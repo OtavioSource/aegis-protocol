@@ -43,6 +43,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <p className="truncate text-xs text-slate-300">{session.user.name}</p>
           <p className="mb-1.5 text-xs text-slate-500">{session.user.role}</p>
           <SignOutButton />
+          <p className="mt-3 text-[10px] text-slate-600 tabular-nums">
+            v{process.env.NEXT_PUBLIC_APP_VERSION} · {process.env.NEXT_PUBLIC_COMMIT_SHA}
+          </p>
         </div>
       </aside>
 
