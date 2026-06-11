@@ -8,6 +8,7 @@ import {
   FileClock,
   LayoutDashboard,
   ShieldCheck,
+  Trophy,
   Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -24,6 +25,7 @@ const LINKS = [
   { href: '/vendors', label: 'Vendors', icon: Building2 },
   { href: '/fiat', label: 'Fiat ramp', icon: Wallet },
   { href: '/audit', label: 'Audit', icon: FileClock },
+  { href: '/community', label: 'Community', icon: Trophy },
 ] as const;
 
 export function Nav() {
