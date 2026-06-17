@@ -103,6 +103,27 @@ const spendRequestsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     // REQUIRES_APPROVAL — não executa, retorna 202
     if (spendRequest.decision === DecisionType.REQUIRES_APPROVAL) {
+      // Fire-and-forget: registra a decisão "requires human approval" no contrato
+      // Soroban (espelha o emit do REJECTED). Guard `!reused` evita evento
+      // duplicado on-chain em retry idempotente.
+      if (!reused) {
+        emitSorobanAuditEvent({
+          prisma: app.prisma,
+          log: app.log,
+          spendRequestId: spendRequest.id,
+          companyId: spendRequest.companyId,
+          agentId: spendRequest.agentId,
+          vendorId: spendRequest.vendorId,
+          amountCents: spendRequest.amountCents,
+          asset: spendRequest.asset,
+          policyId: spendRequest.policyId,
+          policyVersion:
+            (spendRequest.policySnapshot as { version?: number } | null)?.version ?? 1,
+          decision: 'RequiresApproval',
+          reason: spendRequest.decisionReason ?? 'human approval required',
+          timestampMs: spendRequest.createdAt.getTime(),
+        });
+      }
       reply.code(202);
       return serializeSpendRequest(spendRequest, {
         withStellarExpertUrl: true,
