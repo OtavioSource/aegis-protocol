@@ -15,7 +15,7 @@
 | **`@aegis/stellar`** | Treasury, pagamento USDC (Payment + Path Payment), sponsoring CAP-33, SEP-10, SEP-24, Etherfuse client | já validado on-chain |
 | **`@aegis/sdk`** | SDK TS para agentes (`AegisClient.pay`, `payX402`, `parsePaymentRequired`) | `pnpm --filter @aegis/sdk test` (23 testes) |
 | **Dashboard** (`@aegis/web`, Next.js) | Admin: políticas, agentes, vendors, fila de aprovação humana, saldos, fiat ramp, auditoria | http://localhost:3000 |
-| **Soroban audit** (`contracts/aegis-audit`) | Recibo on-chain imutável por decisão (`record_decision`) | **código pronto, contrato ainda não deployado** |
+| **Soroban audit** (`contracts/aegis-audit`) | Recibo on-chain imutável por decisão (`record_decision`) | **deployado na testnet** — contract `CC43AFTCI53Q3AKS4BGZVZ2XZ6XPJX2F3MGGBKJKZODJ7OOBKANEDAJJ` |
 | **x402** | Vendor-mock + agente Claude tool_use + facilitator `/v1/x402/verify` | demo end-to-end, validado on-chain |
 
 ---
@@ -190,16 +190,41 @@ A rota `/v1/x402/verify` tem **dois caminhos**:
 
 ## Auditoria
 
-Dashboard → **Auditoria**. Eventos: `PAYMENT_EXECUTED`, `FIAT_DEPOSITED`, `FIAT_WITHDRAWN`, `APPROVAL_GRANTED`, `APPROVAL_DENIED`. Hoje só no Postgres; **quando o contrato Soroban for deployado**, cada decisão também emite evento on-chain (`record_decision`).
+Dashboard → **Auditoria**. Eventos: `PAYMENT_EXECUTED`, `FIAT_DEPOSITED`, `FIAT_WITHDRAWN`, `APPROVAL_GRANTED`, `APPROVAL_DENIED`. Persistidos no Postgres e **emitidos on-chain** no contrato Soroban (`record_decision`) a cada decisão — topics `("aegis","decision",company_id)`, consultável via Soroban RPC / stellar.expert.
+
+---
+
+## Hardening operacional (API)
+
+A API tem as quatro features de prontidão operacional ligadas por padrão (compostas em [apps/api/src/app.ts](apps/api/src/app.ts)). Como validar cada uma:
+
+| Feature | Implementação | Validação |
+|---|---|---|
+| **Logging estruturado** | pino com `genReqId` que respeita/gera `x-request-id` ([app.ts](apps/api/src/app.ts)); erros logados em [error-handler.ts](apps/api/src/plugins/error-handler.ts) | `x-request-id` presente em toda response (correlaciona com `req.log`) |
+| **Métricas** | prom-client — default Node metrics + `http_requests_total` + `http_request_duration_seconds` ([observability.ts](apps/api/src/plugins/observability.ts)) | `curl http://localhost:4000/metrics` |
+| **Rate limiting** | `@fastify/rate-limit` por Agent (`apiKeyPrefix`) ou IP, `RATE_LIMIT_PER_AGENT_RPS × 60`/min ([rate-limit.ts](apps/api/src/plugins/rate-limit.ts)) | headers `x-ratelimit-limit / remaining / reset` em toda response; excede → `429` + `Retry-After` |
+| **Error tracking** | error handler global no padrão **RFC 7807 Problem Details** ([error-handler.ts](apps/api/src/plugins/error-handler.ts)) — 4xx logados como `warn`, 5xx como `error` sem vazar stack | qualquer erro retorna `application/problem+json` com `type/title/status/detail/instance` |
+
+```bash
+# Métricas Prometheus
+curl -s http://localhost:4000/metrics | grep http_requests_total
+
+# Rate limit + request-id (headers)
+curl -s -D - -o /dev/null -H "Authorization: Bearer <API_KEY>" http://localhost:4000/v1/agents \
+  | grep -iE "x-ratelimit|x-request-id"
+
+# Erro RFC 7807
+curl -s http://localhost:4000/v1/spend-requests/00000000-0000-0000-0000-000000000000 \
+  -H "Authorization: Bearer <API_KEY>"
+```
 
 ---
 
 ## O que ainda não está pronto
 
-1. **Contrato Soroban deployado** — código pronto (`contracts/aegis-audit`); falta `stellar contract deploy` + setar `AUDIT_CONTRACT_ID` no `.env.local`. O emit é fire-and-forget, então não bloqueia o pagamento.
-2. **SEP-31 — payout de vendor em fiat (Pix/conta)** — próximo grande passo para cobrir vendors que só recebem fiat. Abre o modelo de negócio.
-3. **Hardening** — logs estruturados, métricas, rate limit fino, error tracking.
-4. **Validação visual do dashboard** — smoke test automatizado passou; falta o click-through manual.
+1. **SEP-31 — payout de vendor em fiat (Pix/conta)** — próximo grande passo para cobrir vendors que só recebem fiat. Abre o modelo de negócio.
+2. **Store de rate limit distribuído (Redis)** — hoje o rate limit é in-memory (single-instance); multi-instância precisa de store compartilhado.
+3. **Error tracking externo (ex.: Sentry)** — hoje o tracking é via logs estruturados + RFC 7807; um coletor externo (alertas, agregação) fica para produção em escala.
 
 ---
 
