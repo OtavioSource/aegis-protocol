@@ -90,9 +90,16 @@ export async function createSpendRequest(
     throw new ValidationError(`Vendor ${body.vendorId} not found in this Company`);
   }
 
-  // 3. Calcular RuntimeContext (monthly aggregate)
-  const monthlySpentCents = await computeMonthlySpentCents(prisma, agent.id);
-  const ctx: RuntimeContext = { monthlySpentCents };
+  // 3. Calcular RuntimeContext (agregado mensal + velocidade horária, em paralelo)
+  const [monthlySpentCents, hourly] = await Promise.all([
+    computeMonthlySpentCents(prisma, agent.id),
+    computeHourlyVelocity(prisma, agent.id),
+  ]);
+  const ctx: RuntimeContext = {
+    monthlySpentCents,
+    spentLastHourCents: hourly.spentLastHourCents,
+    paymentsLastHour: hourly.paymentsLastHour,
+  };
 
   // 4. Invocar engine pura
   const policyDomain: PolicyDomain = {
@@ -186,6 +193,31 @@ export async function computeMonthlySpentCents(
     _sum: { amountCents: true },
   });
   return Number(agg._sum.amountCents ?? 0n);
+}
+
+/**
+ * Gasto (soma) e nº de pagamentos EXECUTED do agente na última 1h (rolling window).
+ * Alimenta as regras de velocidade `maxSpendPerHourCents` / `maxPaymentsPerHour`.
+ * Uma única agregação devolve soma + contagem.
+ */
+export async function computeHourlyVelocity(
+  prisma: PrismaClient,
+  agentId: string,
+): Promise<{ spentLastHourCents: number; paymentsLastHour: number }> {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const agg = await prisma.spendRequest.aggregate({
+    where: {
+      agentId,
+      status: 'EXECUTED',
+      executedAt: { gte: oneHourAgo },
+    },
+    _sum: { amountCents: true },
+    _count: true,
+  });
+  return {
+    spentLastHourCents: Number(agg._sum.amountCents ?? 0n),
+    paymentsLastHour: agg._count,
+  };
 }
 
 /**

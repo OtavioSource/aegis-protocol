@@ -16,8 +16,13 @@
  *   3. vendorAllowList
  *   4. maxPerTransactionCents
  *   5. monthlyBudgetCents
- *   6. humanApprovalThresholdCents → REQUIRES_APPROVAL
+ *   6. maxSpendPerHourCents       → REQUIRES_APPROVAL (velocidade)
+ *   7. maxPaymentsPerHour         → REQUIRES_APPROVAL (velocidade)
+ *   8. humanApprovalThresholdCents → REQUIRES_APPROVAL
  *   (fallback) APPROVED
+ *
+ * Regras 4-5 são tetos rígidos (REJECTED). Regras 6-8 escalam para humano
+ * (REQUIRES_APPROVAL): velocidade anômala não é "errada", precisa de revisão.
  */
 
 import {
@@ -91,7 +96,30 @@ export function evaluate(
     }
   }
 
-  // 6. acima do threshold humano? escala (não rejeita)
+  // 6. velocidade de gasto por hora? escala (anomalia → revisão humana)
+  // `!= null` (loose) trata policies antigas sem o campo (undefined) como "sem limite".
+  if (r.maxSpendPerHourCents != null) {
+    const spentHour = context.spentLastHourCents ?? 0;
+    const wouldSpendHour = spentHour + request.amountCents;
+    if (wouldSpendHour > r.maxSpendPerHourCents) {
+      return {
+        decision: DecisionType.REQUIRES_APPROVAL,
+        reason: `Hourly spend would reach ${fmt(wouldSpendHour)} (${fmt(spentHour)} in the last hour + ${fmt(request.amountCents)} requested), exceeding the velocity cap (${fmt(r.maxSpendPerHourCents)}) of ${pol}. Human approval required.`,
+        ruleHit: PolicyRuleName.MAX_SPEND_PER_HOUR_CENTS,
+      };
+    }
+  }
+
+  // 7. número de pagamentos por hora? escala
+  if (r.maxPaymentsPerHour != null && (context.paymentsLastHour ?? 0) >= r.maxPaymentsPerHour) {
+    return {
+      decision: DecisionType.REQUIRES_APPROVAL,
+      reason: `Payment count in the last hour (${context.paymentsLastHour ?? 0}) has reached the cap (${r.maxPaymentsPerHour}) of ${pol}. Human approval required.`,
+      ruleHit: PolicyRuleName.MAX_PAYMENTS_PER_HOUR,
+    };
+  }
+
+  // 8. acima do threshold humano? escala (não rejeita)
   if (
     r.humanApprovalThresholdCents !== null &&
     request.amountCents >= r.humanApprovalThresholdCents

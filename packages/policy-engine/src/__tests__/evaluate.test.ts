@@ -41,6 +41,8 @@ const basePolicy: Policy = {
     vendorAllowList: [],
     vendorDenyList: [],
     actionTypes: [],
+    maxSpendPerHourCents: null,
+    maxPaymentsPerHour: null,
     humanApprovalThresholdCents: 5_000,
   },
 };
@@ -238,6 +240,93 @@ describe('evaluate — REQUIRES_APPROVAL', () => {
     const policy = withRules({ humanApprovalThresholdCents: null });
     const request = { ...baseRequest, amountCents: 9_999 };
     expect(evaluate(request, policy, baseCtx).decision).toBe(DecisionType.APPROVED);
+  });
+});
+
+// ---------- REQUIRES_APPROVAL — velocidade de gasto ----------
+
+describe('evaluate — velocidade (escala para humano)', () => {
+  test('REQUIRES_APPROVAL quando spentLastHour + amount > maxSpendPerHourCents', () => {
+    const policy = withRules({ maxSpendPerHourCents: 20_000, humanApprovalThresholdCents: null });
+    const ctx: RuntimeContext = { monthlySpentCents: 0, spentLastHourCents: 19_500, paymentsLastHour: 0 };
+    const request = { ...baseRequest, amountCents: 1_000 }; // 19_500 + 1_000 = 20_500 > 20_000
+    const result = evaluate(request, policy, ctx);
+    expect(isRequiresApproval(result)).toBe(true);
+    if (isRequiresApproval(result)) {
+      expect(result.ruleHit).toBe(PolicyRuleName.MAX_SPEND_PER_HOUR_CENTS);
+    }
+  });
+
+  test('APPROVED no boundary exato de maxSpendPerHourCents (== cap, strict > não escala)', () => {
+    const policy = withRules({ maxSpendPerHourCents: 20_000, humanApprovalThresholdCents: null });
+    const ctx: RuntimeContext = { monthlySpentCents: 0, spentLastHourCents: 19_000, paymentsLastHour: 0 };
+    const request = { ...baseRequest, amountCents: 1_000 }; // == 20_000
+    expect(evaluate(request, policy, ctx).decision).toBe(DecisionType.APPROVED);
+  });
+
+  test('REQUIRES_APPROVAL quando paymentsLastHour >= maxPaymentsPerHour', () => {
+    const policy = withRules({ maxPaymentsPerHour: 5, humanApprovalThresholdCents: null });
+    const ctx: RuntimeContext = { monthlySpentCents: 0, spentLastHourCents: 0, paymentsLastHour: 5 };
+    const result = evaluate(baseRequest, policy, ctx);
+    expect(isRequiresApproval(result)).toBe(true);
+    if (isRequiresApproval(result)) {
+      expect(result.ruleHit).toBe(PolicyRuleName.MAX_PAYMENTS_PER_HOUR);
+    }
+  });
+
+  test('APPROVED quando paymentsLastHour < maxPaymentsPerHour', () => {
+    const policy = withRules({ maxPaymentsPerHour: 5, humanApprovalThresholdCents: null });
+    const ctx: RuntimeContext = { monthlySpentCents: 0, spentLastHourCents: 0, paymentsLastHour: 4 };
+    expect(evaluate(baseRequest, policy, ctx).decision).toBe(DecisionType.APPROVED);
+  });
+
+  test('maxSpendPerHourCents null = sem limite de velocidade', () => {
+    const policy = withRules({ maxSpendPerHourCents: null, humanApprovalThresholdCents: null });
+    const ctx: RuntimeContext = { monthlySpentCents: 0, spentLastHourCents: 999_999, paymentsLastHour: 0 };
+    expect(evaluate(baseRequest, policy, ctx).decision).toBe(DecisionType.APPROVED);
+  });
+
+  test('contadores de hora ausentes no context são tratados como 0', () => {
+    const policy = withRules({
+      maxSpendPerHourCents: 20_000,
+      maxPaymentsPerHour: 5,
+      humanApprovalThresholdCents: null,
+    });
+    // ctx sem os campos de hora → engine usa 0 (?? 0)
+    const ctx: RuntimeContext = { monthlySpentCents: 0 };
+    expect(evaluate(baseRequest, policy, ctx).decision).toBe(DecisionType.APPROVED);
+  });
+
+  test('budget mensal (REJECTED) precede velocidade horária (REQUIRES_APPROVAL)', () => {
+    const policy = withRules({
+      maxPerTransactionCents: null,
+      monthlyBudgetCents: 1_000, // amount=2000 viola → REJECTED
+      maxSpendPerHourCents: 100, // também estouraria, mas vem depois
+      humanApprovalThresholdCents: null,
+    });
+    const ctx: RuntimeContext = { monthlySpentCents: 0, spentLastHourCents: 0, paymentsLastHour: 0 };
+    const request = { ...baseRequest, amountCents: 2_000 };
+    const result = evaluate(request, policy, ctx);
+    if (isRejected(result)) {
+      expect(result.ruleHit).toBe(PolicyRuleName.MONTHLY_BUDGET_CENTS);
+    } else {
+      throw new Error('esperava REJECTED');
+    }
+  });
+
+  test('velocidade horária precede humanApprovalThresholdCents', () => {
+    const policy = withRules({
+      maxSpendPerHourCents: 5_000, // amount=6000 estoura velocidade
+      humanApprovalThresholdCents: 1_000, // também escalaria
+    });
+    const ctx: RuntimeContext = { monthlySpentCents: 0, spentLastHourCents: 0, paymentsLastHour: 0 };
+    const request = { ...baseRequest, amountCents: 6_000 };
+    const result = evaluate(request, policy, ctx);
+    if (isRequiresApproval(result)) {
+      expect(result.ruleHit).toBe(PolicyRuleName.MAX_SPEND_PER_HOUR_CENTS);
+    } else {
+      throw new Error('esperava REQUIRES_APPROVAL');
+    }
   });
 });
 

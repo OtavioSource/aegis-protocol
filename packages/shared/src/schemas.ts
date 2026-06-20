@@ -19,6 +19,11 @@ import { z } from 'zod';
  * - `vendorAllowList = []` desabilita o check (todos vendors permitidos).
  * - `vendorDenyList` é avaliada antes de allowList (deny vence).
  * - `actionTypes = []` desabilita o check (qualquer actionType permitido).
+ * - `maxSpendPerHourCents` / `maxPaymentsPerHour` são limites de **velocidade**:
+ *   ao exceder, a decisão **escala para humano** (`REQUIRES_APPROVAL`) em vez de
+ *   rejeitar — contém agente em loop sem quebrar workloads legítimos de alto
+ *   volume. `null` = sem limite. `default(null)` mantém compat com policies
+ *   antigas que não têm o campo.
  * - `pathPaymentSlippage` aplica-se quando `Vendor.preferredAsset ≠ USDC` (RF11).
  */
 export const PolicyRulesSchema = z.object({
@@ -27,6 +32,10 @@ export const PolicyRulesSchema = z.object({
   vendorAllowList: z.array(z.string().uuid()).default([]),
   vendorDenyList: z.array(z.string().uuid()).default([]),
   actionTypes: z.array(z.string().min(1)).default([]),
+  /** Teto de gasto na última 1h (centavos). Exceder → REQUIRES_APPROVAL. */
+  maxSpendPerHourCents: z.number().int().nonnegative().nullable().default(null),
+  /** Teto de nº de pagamentos EXECUTED na última 1h. Exceder → REQUIRES_APPROVAL. */
+  maxPaymentsPerHour: z.number().int().nonnegative().nullable().default(null),
   humanApprovalThresholdCents: z.number().int().nonnegative().nullable(),
   pathPaymentSlippage: z.number().min(0).max(1).optional(),
 });
@@ -82,4 +91,17 @@ export const RuntimeContextSchema = z.object({
    *     AND executed_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC');
    */
   monthlySpentCents: z.number().int().nonnegative(),
+  /**
+   * Total gasto na última 1h (rolling window) por este agente, em centavos.
+   * Alimenta a regra de velocidade `maxSpendPerHourCents`.
+   *   WHERE agent_id = $1 AND status = 'EXECUTED' AND executed_at >= NOW() - INTERVAL '1 hour'
+   * Opcional: ausente → tratado como 0 pela engine (regra só dispara se a policy
+   * tiver o cap configurado, e aí o orchestrator sempre fornece o valor).
+   */
+  spentLastHourCents: z.number().int().nonnegative().optional(),
+  /**
+   * Nº de pagamentos EXECUTED na última 1h por este agente.
+   * Alimenta a regra de velocidade `maxPaymentsPerHour`. Opcional (ver acima).
+   */
+  paymentsLastHour: z.number().int().nonnegative().optional(),
 });
