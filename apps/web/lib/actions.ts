@@ -120,6 +120,9 @@ export async function createPolicy(_: ActionState, fd: FormData): Promise<Action
         maxPerTransactionCents: dollarsToCents(fd, 'maxPerTransaction'),
         monthlyBudgetCents: dollarsToCents(fd, 'monthlyBudget'),
         humanApprovalThresholdCents: dollarsToCents(fd, 'humanApprovalThreshold'),
+        // Limites de velocidade (escala p/ humano ao exceder). Vazio = sem limite.
+        maxSpendPerHourCents: dollarsToCents(fd, 'maxSpendPerHour'),
+        maxPaymentsPerHour: intOrNull(fd, 'maxPaymentsPerHour'),
         vendorAllowList: [],
         vendorDenyList: [],
         actionTypes,

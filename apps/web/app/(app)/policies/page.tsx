@@ -66,6 +66,36 @@ export default async function PoliciesPage() {
                 />
               </Field>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                label={
+                  <span className="inline-flex items-center gap-1">
+                    Max spend / hour ($)
+                    <InfoTooltip text="Velocity cap: total spent in the last rolling hour. Exceeding escalates the spend request to human approval (it does not reject). Empty = no limit." />
+                  </span>
+                }
+                hint="empty = no limit"
+              >
+                <Input
+                  name="maxSpendPerHour"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="500.00"
+                />
+              </Field>
+              <Field
+                label={
+                  <span className="inline-flex items-center gap-1">
+                    Max payments / hour
+                    <InfoTooltip text="Velocity cap: number of executed payments in the last rolling hour. Exceeding escalates to human approval. Empty = no limit." />
+                  </span>
+                }
+                hint="empty = no limit"
+              >
+                <Input name="maxPaymentsPerHour" type="number" step="1" min="0" placeholder="100" />
+              </Field>
+            </div>
             <Field
               label={
                 <span className="inline-flex items-center gap-1">
@@ -92,6 +122,8 @@ export default async function PoliciesPage() {
               <Th>Max/tx</Th>
               <Th>Monthly budget</Th>
               <Th>Approval ≥</Th>
+              <Th>Spend/hr</Th>
+              <Th>Pmts/hr</Th>
               <Th>Action types</Th>
               <Th>State</Th>
               <Th>Created</Th>
@@ -106,6 +138,8 @@ export default async function PoliciesPage() {
                 <Td>{fmtCents(p.rules.maxPerTransactionCents)}</Td>
                 <Td>{fmtCents(p.rules.monthlyBudgetCents)}</Td>
                 <Td>{fmtCents(p.rules.humanApprovalThresholdCents)}</Td>
+                <Td>{fmtCents(p.rules.maxSpendPerHourCents ?? null)}</Td>
+                <Td>{p.rules.maxPaymentsPerHour ?? '—'}</Td>
                 <Td>{p.rules.actionTypes.length > 0 ? p.rules.actionTypes.join(', ') : 'all'}</Td>
                 <Td>
                   {p.isActive ? <Badge tone="green">active</Badge> : <Badge tone="gray">inactive</Badge>}

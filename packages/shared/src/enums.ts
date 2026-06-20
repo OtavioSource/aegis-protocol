@@ -109,5 +109,7 @@ export enum PolicyRuleName {
   VENDOR_ALLOW_LIST = 'vendorAllowList',
   MAX_PER_TRANSACTION_CENTS = 'maxPerTransactionCents',
   MONTHLY_BUDGET_CENTS = 'monthlyBudgetCents',
+  MAX_SPEND_PER_HOUR_CENTS = 'maxSpendPerHourCents',
+  MAX_PAYMENTS_PER_HOUR = 'maxPaymentsPerHour',
   HUMAN_APPROVAL_THRESHOLD_CENTS = 'humanApprovalThresholdCents',
 }
