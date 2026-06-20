@@ -29,6 +29,8 @@ export type Policy = {
     maxPerTransactionCents: number | null;
     monthlyBudgetCents: number | null;
     humanApprovalThresholdCents: number | null;
+    maxSpendPerHourCents: number | null;
+    maxPaymentsPerHour: number | null;
     actionTypes: string[];
   };
   isActive: boolean;
