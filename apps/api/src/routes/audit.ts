@@ -24,7 +24,7 @@ const ListQuery = z.object({
 
 const auditRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get('/v1/audit', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const query = ListQuery.parse(request.query);
 
     const where = {
@@ -48,7 +48,7 @@ const auditRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   app.get<{ Params: { id: string } }>('/v1/audit/:id', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const found = await app.prisma.auditEvent.findFirst({
       where: { id: request.params.id, companyId: caller.companyId },
     });

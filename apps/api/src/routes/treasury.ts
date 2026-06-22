@@ -11,7 +11,7 @@ import { env } from '../env.js';
 
 const treasuryRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get('/v1/treasury/balances', async (request) => {
-    request.requireAgent();
+    request.requireAuth();
 
     const [usdc, xlm] = await Promise.all([
       app.stellar.getTreasuryBalance('USDC'),

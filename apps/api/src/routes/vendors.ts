@@ -38,7 +38,7 @@ const PatchVendorBody = z.object({
 const vendorsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   // ----- LIST -----
   app.get('/v1/vendors', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const vendors = await app.prisma.vendor.findMany({
       where: { companyId: caller.companyId },
       include: { wallets: { where: { isPrimary: true } } },
@@ -49,7 +49,7 @@ const vendorsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- GET BY ID -----
   app.get<{ Params: { id: string } }>('/v1/vendors/:id', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const found = await app.prisma.vendor.findFirst({
       where: { id: request.params.id, companyId: caller.companyId },
       include: { wallets: true },
@@ -60,7 +60,7 @@ const vendorsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- CREATE -----
   app.post('/v1/vendors', async (request, reply) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const body = CreateVendorBody.parse(request.body);
     const created = await app.prisma.vendor.create({
       data: {
@@ -105,7 +105,7 @@ const vendorsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post<{ Params: { id: string } }>(
     '/v1/vendors/:id/wallets/sponsor',
     async (request, reply) => {
-      const caller = request.requireAgent();
+      const caller = request.requireAuth();
       if (!env.VENDOR_KEY_ENCRYPTION_KEY) {
         throw new ConflictError(
           'VENDOR_KEY_ENCRYPTION_KEY not configured; cannot sponsor vendor wallet.',
@@ -144,7 +144,7 @@ const vendorsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- PATCH -----
   app.patch<{ Params: { id: string } }>('/v1/vendors/:id', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const body = PatchVendorBody.parse(request.body);
 
     const existing = await app.prisma.vendor.findFirst({
@@ -167,7 +167,7 @@ const vendorsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- DELETE (soft via status=SUSPENDED no MVP — sponsorship revoke vem na iter 5) -----
   app.delete<{ Params: { id: string } }>('/v1/vendors/:id', async (request, reply) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const existing = await app.prisma.vendor.findFirst({
       where: { id: request.params.id, companyId: caller.companyId },
     });

@@ -1,16 +1,21 @@
 /**
  * Cliente HTTP server-side da Aegis API.
  *
- * Roda apenas no servidor (server components / server actions): usa a
- * AEGIS_API_KEY (chave cr_ de Agent) que NUNCA chega ao browser. O dashboard
- * autentica o humano via NextAuth; estas chamadas falam com a API em nome
- * da Company usando a chave de serviço.
+ * Roda apenas no servidor (server components / server actions). Autentica na
+ * API com o **session token do usuário logado**, lido do JWT do NextAuth (cookie
+ * httpOnly criptografado) via `getToken` — server-only, nunca chega ao browser.
+ *
+ * Substitui a antiga `AEGIS_API_KEY` estática (key de Agent): aquela exigia
+ * redeploy no Vercel a cada rotação de key. Agora a auth do dashboard acompanha
+ * a sessão do humano e é independente do ciclo de vida das keys de agente.
  */
 
 import 'server-only';
 
+import { cookies } from 'next/headers';
+import { decode } from 'next-auth/jwt';
+
 const API_URL = process.env.AEGIS_API_URL ?? 'http://localhost:4000';
-const API_KEY = process.env.AEGIS_API_KEY ?? '';
 
 export class ApiError extends Error {
   constructor(
@@ -22,6 +27,29 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Recupera o session token da Aegis API guardado no JWT do NextAuth.
+ * Server-only: lê o cookie httpOnly e decifra via `getToken` (NEXTAUTH_SECRET).
+ */
+async function getBearer(): Promise<string> {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new ApiError('NEXTAUTH_SECRET not configured', 500);
+
+  // Nome do cookie do NextAuth: `__Secure-` prefix em https.
+  const secure = (process.env.NEXTAUTH_URL ?? '').startsWith('https://');
+  const cookieName = secure
+    ? '__Secure-next-auth.session-token'
+    : 'next-auth.session-token';
+
+  const raw = cookies().get(cookieName)?.value;
+  const token = raw ? await decode({ token: raw, secret }) : null;
+  const sessionToken = token?.sessionToken;
+  if (!sessionToken) {
+    throw new ApiError('Not authenticated (no session token)', 401);
+  }
+  return sessionToken;
+}
+
 type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 async function request<T>(
@@ -30,10 +58,11 @@ async function request<T>(
   body?: unknown,
   headers?: Record<string, string>,
 ): Promise<T> {
+  const bearer = await getBearer();
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers: {
-      Authorization: `Bearer ${API_KEY}`,
+      Authorization: `Bearer ${bearer}`,
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...headers,
     },

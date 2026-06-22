@@ -11,6 +11,8 @@ interface AegisProfile {
 declare module 'next-auth' {
   interface User extends AegisProfile {
     id: string;
+    /** Token de sessão assinado pela Aegis API — fica só no JWT server-side, nunca na Session do browser. */
+    sessionToken?: string;
   }
   interface Session {
     user: {
@@ -22,5 +24,8 @@ declare module 'next-auth' {
 }
 
 declare module 'next-auth/jwt' {
-  interface JWT extends AegisProfile {}
+  interface JWT extends AegisProfile {
+    /** Token de sessão da Aegis API; lido server-side via getToken, fora do alcance do browser. */
+    sessionToken?: string;
+  }
 }
