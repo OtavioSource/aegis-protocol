@@ -35,6 +35,7 @@ import { createHorizonServer } from './horizon.js';
 import { loadTreasuryKey } from './keypair.js';
 import {
   buildPaymentEnvelope,
+  buildWalletSetupTransaction,
   cosignMatchingEnvelope,
 } from './multisig.js';
 import type { NetworkConfig, NetworkKind } from './network.js';
@@ -111,6 +112,68 @@ export class StellarSettlementAdapter implements SettlementAdapter {
   /** Pubkey do co-signer do Aegis para uma company (para persistir na Wallet). */
   aegisSignerPubKeyForCompany(companyId: string): string {
     return this.deriveAegisSignerForCompany(companyId).publicKey();
+  }
+
+  /** True se a conta já existe on-chain (decide createOwnerAccount no setup). */
+  async accountExists(address: string): Promise<boolean> {
+    try {
+      await this.horizon.loadAccount(address);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Monta a tx de setup multisig de uma carteira (signers + thresholds +
+   * sponsoring CAP-33), já assinada pelo sponsor (conta operacional do Aegis).
+   * Retorna o XDR para o **dono** assinar client-side antes de submeter.
+   */
+  async buildWalletSetup(params: {
+    ownerAddress: string;
+    createOwnerAccount: boolean;
+    companyId: string;
+    agentSignerPubKeys: string[];
+    openUsdcTrustline: boolean;
+  }): Promise<{ setupXdr: string; xlmSponsored: string; aegisSignerPubKey: string }> {
+    const aegisKp = this.deriveAegisSignerForCompany(params.companyId);
+    const usdcAsset = params.openUsdcTrustline
+      ? await resolveAsset('USDC', this.networkConfig.kind, this.anchorDomain)
+      : undefined;
+    const { transaction, xlmSponsored } = await buildWalletSetupTransaction({
+      horizon: this.horizon,
+      network: this.networkConfig,
+      sponsorKeypair: this.treasuryKeypair,
+      ownerAddress: params.ownerAddress,
+      createOwnerAccount: params.createOwnerAccount,
+      aegisSignerPubKey: aegisKp.publicKey(),
+      agentSignerPubKeys: params.agentSignerPubKeys,
+      usdcAsset,
+    });
+    return {
+      setupXdr: transaction.toXDR(),
+      xlmSponsored,
+      aegisSignerPubKey: aegisKp.publicKey(),
+    };
+  }
+
+  /**
+   * Submete uma tx já totalmente assinada (sem adicionar assinatura). Usado para
+   * o setup de carteira (já vem sponsor-assinado + dono-assinado).
+   */
+  async submitSignedXdr(xdr: string): Promise<{ txHash: string; ledger: number }> {
+    let tx: ReturnType<typeof TransactionBuilder.fromXDR>;
+    try {
+      tx = TransactionBuilder.fromXDR(xdr, this.networkConfig.passphrase);
+    } catch (err) {
+      throw new Error(`Invalid transaction XDR: ${(err as Error).message}`);
+    }
+    try {
+      const result = await this.horizon.submitTransaction(tx);
+      return { txHash: result.hash, ledger: result.ledger };
+    } catch (err) {
+      throw new Error(extractHorizonError(err));
+    }
   }
 
   /**

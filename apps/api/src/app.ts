@@ -27,6 +27,7 @@ import policiesRoute from './routes/policies.js';
 import spendRequestsRoute from './routes/spend-requests.js';
 import treasuryRoute from './routes/treasury.js';
 import vendorsRoute from './routes/vendors.js';
+import walletsRoute from './routes/wallets.js';
 import x402Route from './routes/x402.js';
 import { env } from './env.js';
 
@@ -72,6 +73,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(agentsRoute);
   await app.register(policiesRoute);
   await app.register(vendorsRoute);
+  await app.register(walletsRoute);
   await app.register(spendRequestsRoute);
   await app.register(approvalsRoute);
   await app.register(auditRoute);

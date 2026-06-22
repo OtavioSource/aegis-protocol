@@ -11,6 +11,7 @@
 
 import { randomBytes } from 'node:crypto';
 
+import { generateKeypairStrings } from '@aegis/stellar';
 import { AgentStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
@@ -25,6 +26,8 @@ const CreateAgentBody = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2_000).optional(),
   activePolicyId: z.string().uuid(),
+  /** Carteira (centro de custo) da qual o agente poderá gastar (não-custodial). */
+  walletId: z.string().uuid().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -32,6 +35,7 @@ const PatchAgentBody = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(2_000).nullable().optional(),
   activePolicyId: z.string().uuid().optional(),
+  walletId: z.string().uuid().nullable().optional(),
   status: z.nativeEnum(AgentStatus).optional(),
   metadata: z.record(z.unknown()).optional(),
 });
@@ -47,6 +51,8 @@ function publicAgent(a: {
   description: string | null;
   apiKeyPrefix: string;
   activePolicyId: string;
+  walletId: string | null;
+  signerPubKey: string | null;
   status: AgentStatus;
   metadata: unknown;
   createdAt: Date;
@@ -58,11 +64,25 @@ function publicAgent(a: {
     description: a.description,
     apiKeyPrefix: a.apiKeyPrefix,
     activePolicyId: a.activePolicyId,
+    walletId: a.walletId,
+    signerPubKey: a.signerPubKey,
     status: a.status,
     metadata: a.metadata,
     createdAt: a.createdAt,
     revokedAt: a.revokedAt,
   };
+}
+
+/** Valida que a carteira existe na company. Lança ValidationError caso contrário. */
+async function assertWalletInCompany(
+  app: FastifyInstance,
+  companyId: string,
+  walletId: string,
+): Promise<void> {
+  const wallet = await app.prisma.wallet.findFirst({ where: { id: walletId, companyId } });
+  if (!wallet) {
+    throw new ValidationError(`walletId ${walletId} not found in this Company`);
+  }
 }
 
 const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
@@ -101,8 +121,16 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       );
     }
 
+    if (body.walletId) {
+      await assertWalletInCompany(app, caller.companyId, body.walletId);
+    }
+
     const { apiKey, prefix } = generateApiKey();
     const apiKeyHash = await bcrypt.hash(apiKey, BCRYPT_ROUNDS);
+
+    // Keypair de assinatura do agente (modelo não-custodial 5a): só a pubkey é
+    // persistida; o secret é exibido UMA vez para o dev configurar o SDK.
+    const signer = generateKeypairStrings();
 
     const created = await app.prisma.agent.create({
       data: {
@@ -112,6 +140,8 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         apiKeyHash,
         apiKeyPrefix: prefix,
         activePolicyId: body.activePolicyId,
+        walletId: body.walletId ?? null,
+        signerPubKey: signer.publicKey,
         metadata: (body.metadata ?? {}) as object,
       },
     });
@@ -120,6 +150,7 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     return {
       ...publicAgent(created),
       apiKey, // exibido UMA vez — caller precisa salvar
+      signerSecret: signer.secret, // exibido UMA vez — chave de assinatura do agente
     };
   });
 
@@ -144,12 +175,17 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
     }
 
+    if (body.walletId) {
+      await assertWalletInCompany(app, caller.companyId, body.walletId);
+    }
+
     const updated = await app.prisma.agent.update({
       where: { id: request.params.id },
       data: {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(body.activePolicyId !== undefined ? { activePolicyId: body.activePolicyId } : {}),
+        ...(body.walletId !== undefined ? { walletId: body.walletId } : {}),
         ...(body.status !== undefined
           ? {
               status: body.status,
