@@ -89,6 +89,27 @@ export async function prepareSpendRequestEnvelope(
     );
   }
 
+  // Um pagamento em voo por carteira. O envelope fixa a sequence da conta no
+  // build; pagamentos concorrentes da mesma carteira pegariam a MESMA sequence
+  // e só o primeiro /cosign submeteria (os demais → tx_bad_seq). Falhamos rápido
+  // com motivo claro em vez de gerar essa colisão (ADR 0007 Q-A). Throughput
+  // paralelo real (channel accounts) é follow-up.
+  const inflight = await prisma.spendRequest.findFirst({
+    where: {
+      walletId: sr.walletId,
+      id: { not: sr.id },
+      status: {
+        in: [SpendRequestStatus.AWAITING_AGENT_SIGNATURE, SpendRequestStatus.EXECUTING],
+      },
+    },
+    select: { id: true },
+  });
+  if (inflight) {
+    return fail(
+      `Carteira com o pagamento ${inflight.id} pendente de assinatura/execução — conclua-o antes de iniciar outro nesta carteira.`,
+    );
+  }
+
   let envelopeXdr: string;
   try {
     envelopeXdr = await app.stellar.buildPaymentEnvelope({
