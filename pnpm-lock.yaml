@@ -242,6 +242,9 @@ importers:
       '@aegis/shared':
         specifier: workspace:*
         version: link:../shared
+      '@stellar/stellar-base':
+        specifier: ^14.1.0
+        version: 14.1.0
       '@x402/core':
         specifier: ^2.13.0
         version: 2.13.0
@@ -997,6 +1000,7 @@ packages:
   '@stellar/stellar-base@14.1.0':
     resolution: {integrity: sha512-A8kFli6QGy22SRF45IjgPAJfUNGjnI+R7g4DF5NZYVsD1kGf7B4ITyc4OPclLV9tqNI4/lXxafGEw0JEUbHixw==}
     engines: {node: '>=20.0.0'}
+    deprecated: This package is now rolled into @stellar/stellar-sdk. Please use @stellar/stellar-sdk to continue receiving updates and support.
 
   '@stellar/stellar-sdk@14.6.1':
     resolution: {integrity: sha512-A1rQWDLdUasXkMXnYSuhgep+3ZZzyuXJKdt5/KAIc0gkmSp906HTvUpbT4pu+bVr41tu0+J4Ugz9J4BQAGGytg==}

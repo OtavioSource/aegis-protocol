@@ -239,6 +239,12 @@ export function serializeSpendRequest(
       ? `https://stellar.expert/explorer/${options.network === 'mainnet' ? 'public' : 'testnet'}/tx/${sr.txHash}`
       : null;
 
+  // Passphrase da network — o agente assina o envelopeXdr client-side com ela.
+  const networkPassphrase =
+    options?.network === 'mainnet'
+      ? 'Public Global Stellar Network ; September 2015'
+      : 'Test SDF Network ; September 2015';
+
   return {
     id: sr.id,
     status: sr.status,
@@ -259,6 +265,7 @@ export function serializeSpendRequest(
     // Não-custodial (5a): envelope canônico p/ o agente assinar quando
     // status = AWAITING_AGENT_SIGNATURE. NULL nos demais estados.
     envelopeXdr: sr.envelopeXdr,
+    networkPassphrase,
     createdAt: sr.createdAt,
     evaluatedAt: sr.evaluatedAt,
     executedAt: sr.executedAt,

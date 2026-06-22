@@ -12,6 +12,13 @@ import type { DecisionType, SpendRequestStatus } from '@aegis/shared';
 export interface AegisClientOptions {
   /** API key do Agent (formato `cr_<32 chars>`). */
   apiKey: string;
+  /**
+   * Secret Stellar do agente (`S...`) — modelo não-custodial 5a. Usada para
+   * co-assinar o envelope de pagamento client-side no fluxo two-phase. Se
+   * omitida, `pay()` retorna AWAITING_AGENT_SIGNATURE sem co-assinar (o caller
+   * pode assinar manualmente e chamar `cosign()`).
+   */
+  agentSignerSecret?: string;
   /** URL base da Aegis API. Default: https://api.aegis-protocol.dev */
   baseUrl?: string;
   /** Timeout por request em ms. Default 30000. */
@@ -67,6 +74,13 @@ export interface PayResult {
   failureReason: string | null;
   createdAt: string;
   evaluatedAt: string | null;
+  /**
+   * Não-custodial (5a): envelope canônico não-assinado, presente quando
+   * `status === 'AWAITING_AGENT_SIGNATURE'`. O agente assina e chama `/cosign`.
+   */
+  envelopeXdr?: string | null;
+  /** Passphrase da network para assinar o `envelopeXdr`. */
+  networkPassphrase?: string | null;
 }
 
 // ===== List / Get =====
