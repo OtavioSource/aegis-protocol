@@ -333,6 +333,13 @@ export interface CosignMatchingEnvelopeParams {
   signedXdr: string;
   /** Pubkey do agente que deve ter assinado. */
   expectedAgentSignerPubKey: string;
+  /**
+   * Conta que paga a **fee** via fee-bump (conta operacional do Aegis). Quando
+   * fornecida, a tx do agente é embrulhada num fee-bump pago por esta conta, de
+   * modo que a carteira do dono NÃO precisa de XLM para fees (CAP-15). Sem ela,
+   * a fee sai da própria carteira (que precisa ter XLM).
+   */
+  feeSourceKeypair?: Keypair;
 }
 
 /**
@@ -364,10 +371,34 @@ export async function cosignMatchingEnvelope(
   if (!agentSigned) throw new Error('assinatura do agente ausente ou inválida');
 
   signed.sign(params.aegisKeypair);
+
+  // Fee-bump: o Aegis paga a fee para que a carteira do dono não precise de XLM
+  // (essencial para carteiras GENERATED, criadas com 0 XLM). A fee-bump base
+  // precisa cobrir a fee/op da tx interna (envelope = 2× BASE_FEE por op).
+  const txToSubmit = params.feeSourceKeypair
+    ? buildAegisFeeBump(signed, params.feeSourceKeypair, params.networkPassphrase)
+    : signed;
+
   try {
-    const result = await params.horizon.submitTransaction(signed);
+    const result = await params.horizon.submitTransaction(txToSubmit);
     return { txHash: result.hash, ledger: result.ledger };
   } catch (err) {
     throw new Error(extractHorizonError(err));
   }
+}
+
+/** Embrulha a tx do agente num fee-bump pago pela conta do Aegis (CAP-15). */
+function buildAegisFeeBump(
+  inner: Transaction,
+  feeSource: Keypair,
+  networkPassphrase: string,
+) {
+  const feeBump = TransactionBuilder.buildFeeBumpTransaction(
+    feeSource,
+    (Number(BASE_FEE) * 2).toString(), // base/op do bump ≥ fee/op da tx interna
+    inner,
+    networkPassphrase,
+  );
+  feeBump.sign(feeSource);
+  return feeBump;
 }

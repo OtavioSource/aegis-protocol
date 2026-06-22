@@ -15,12 +15,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import {
-  fundAccountTestnet,
-  generateKeypairStrings,
-  resolveNetwork,
-  signTransactionXdr,
-} from '@aegis/stellar';
+import { generateKeypairStrings, signTransactionXdr } from '@aegis/stellar';
 
 import { buildApp } from '../app.js';
 import { mintSessionToken } from '../lib/session-token.js';
@@ -40,7 +35,6 @@ function check(cond: boolean, label: string, extra?: unknown) {
 async function main() {
   const app = await buildApp();
   const prisma = app.prisma;
-  const network = resolveNetwork('testnet');
 
   const stamp = Date.now();
   const company = await prisma.company.create({
@@ -105,10 +99,11 @@ async function main() {
     const signerSecret = agentRes.body.signerSecret as string;
     check(!!signerSecret && !!agentRes.body.signerPubKey, 'agente recebeu signerSecret + signerPubKey');
 
-    // 2. Gerar a master do dono e fundar via friendbot (XLM p/ fees; conta passa a existir)
+    // 2. Gerar a master do dono — SEM friendbot. A conta nasce com 0 XLM
+    //    (modo GENERATED real). O setup cria a conta sponsorizada e o pagamento
+    //    usa fee-bump pago pelo Aegis, então a carteira nunca precisa de XLM.
     const owner = generateKeypairStrings();
-    await fundAccountTestnet(network, owner.publicKey);
-    check(true, `owner fundado via friendbot: ${owner.publicKey.slice(0, 8)}…`);
+    check(true, `owner GENERATED (0 XLM, fee-bump pelo Aegis): ${owner.publicKey.slice(0, 8)}…`);
 
     // 3. Criar carteira (modo GENERATED — só a pubkey vai à API)
     const walletRes = await call('POST', '/v1/wallets', {

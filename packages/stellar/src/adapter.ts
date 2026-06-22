@@ -220,6 +220,8 @@ export class StellarSettlementAdapter implements SettlementAdapter {
       expectedEnvelopeXdr: params.expectedEnvelopeXdr,
       signedXdr: params.signedXdr,
       expectedAgentSignerPubKey: params.expectedAgentSignerPubKey,
+      // Aegis paga a fee (fee-bump) → carteira do dono não precisa de XLM.
+      feeSourceKeypair: this.treasuryKeypair,
     });
   }
 
