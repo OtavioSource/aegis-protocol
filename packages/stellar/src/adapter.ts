@@ -211,8 +211,20 @@ export class StellarSettlementAdapter implements SettlementAdapter {
     expectedEnvelopeXdr: string;
     signedXdr: string;
     expectedAgentSignerPubKey: string;
+    /** Pubkey do co-signer do Aegis configurado on-chain (Wallet.aegisSignerPubKey). */
+    expectedAegisSignerPubKey?: string;
   }): Promise<{ txHash: string; ledger: number }> {
     const aegisKeypair = this.deriveAegisSignerForCompany(params.companyId);
+    if (
+      params.expectedAegisSignerPubKey &&
+      aegisKeypair.publicKey() !== params.expectedAegisSignerPubKey
+    ) {
+      throw new Error(
+        `Aegis signer divergente: derivado ${aegisKeypair.publicKey()} ≠ configurado on-chain ` +
+          `${params.expectedAegisSignerPubKey}. A seed-raiz (AEGIS_SIGNER_ROOT_SECRET) pode ter ` +
+          `sido rotacionada — a carteira precisa de novo setup para registrar a nova aegis key.`,
+      );
+    }
     return cosignMatchingEnvelope({
       horizon: this.horizon,
       networkPassphrase: this.networkConfig.passphrase,
