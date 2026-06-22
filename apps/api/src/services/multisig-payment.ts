@@ -151,7 +151,7 @@ export async function cosignSpendRequest(
 
   const sr = await prisma.spendRequest.findUnique({
     where: { id: spendRequestId },
-    include: { agent: true },
+    include: { agent: true, wallet: true },
   });
   if (!sr) throw new NotFoundError(`SpendRequest ${spendRequestId} not found`);
   if (!sr.envelopeXdr) {
@@ -168,6 +168,10 @@ export async function cosignSpendRequest(
       expectedEnvelopeXdr: sr.envelopeXdr,
       signedXdr,
       expectedAgentSignerPubKey: sr.agent.signerPubKey,
+      // Garante que a aegis key derivada bate com o signer configurado on-chain.
+      // Se a seed-raiz foi rotacionada, diverge → falha clara em vez de uma tx
+      // com peso insuficiente.
+      expectedAegisSignerPubKey: sr.wallet?.aegisSignerPubKey,
     });
   } catch (err) {
     return markFailedCosign(prisma, app, sr, (err as Error).message || 'Erro ao co-assinar/submeter');
