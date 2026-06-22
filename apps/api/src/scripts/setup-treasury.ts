@@ -1,18 +1,20 @@
 /**
- * Setup treasury — script idempotente para preparar a hot wallet do MVP testnet.
+ * Setup da chave backend do Aegis — script idempotente para a hot wallet do
+ * MVP testnet. Esta chave assina o Soroban audit (`record_decision`,
+ * admin.require_auth) e o lado servidor do x402; NÃO custodia fundos de usuário
+ * (modelo não-custodial — ver ADR 0007).
  *
  * Fluxo:
  * 1. Carrega TREASURY_SECRET de env (se setado) OU gera nova keypair.
  * 2. Funda via Friendbot (se ainda não existe).
  * 3. Resolve issuer USDC via SEP-1 stellar.toml do test-anchor.
  * 4. Estabelece trustline USDC (idempotente via @aegis/stellar ensureTrustline).
- * 5. Upsert TreasuryAccount no DB.
- * 6. Se gerou keypair nova, imprime instruções pra colar no .env.local +
+ * 5. Se gerou keypair nova, imprime instruções pra colar no .env.local +
  *    sugere VENDOR_KEY_ENCRYPTION_KEY se ainda não configurada.
  *
  * Uso: pnpm --filter @aegis/api setup:treasury
  *
- * Segurança: NUNCA persiste o secret em DB (apenas o publicKey).
+ * Segurança: NUNCA persiste o secret (apenas imprime para você colar no env).
  */
 
 import {
@@ -26,11 +28,8 @@ import {
   resolveAsset,
   resolveNetwork,
 } from '@aegis/stellar';
-import { Network as PrismaNetwork, PrismaClient } from '@prisma/client';
 
 import { env } from '../env.js';
-
-const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
   const network = resolveNetwork(env.STELLAR_NETWORK, { horizonUrl: env.STELLAR_HORIZON_URL });
@@ -87,33 +86,7 @@ async function main(): Promise<void> {
     console.log(`     ${network.stellarExpertBase}/tx/${trustResult.txHash}`);
   }
 
-  // ===== Passo 5 — Upsert TreasuryAccount no DB =====
-  console.log('\n💾 Persistindo TreasuryAccount...');
-  const existingTreasury = await prisma.treasuryAccount.findFirst({
-    where: { network: PrismaNetwork.TESTNET },
-  });
-  if (existingTreasury) {
-    if (existingTreasury.publicKey !== keypair.publicKey()) {
-      await prisma.treasuryAccount.update({
-        where: { id: existingTreasury.id },
-        data: { publicKey: keypair.publicKey(), secretKeyEnvVar: 'TREASURY_SECRET' },
-      });
-      console.log(`   ✓ TreasuryAccount atualizado: ${keypair.publicKey()}`);
-    } else {
-      console.log(`   ✓ TreasuryAccount já existe: ${keypair.publicKey()}`);
-    }
-  } else {
-    await prisma.treasuryAccount.create({
-      data: {
-        publicKey: keypair.publicKey(),
-        network: PrismaNetwork.TESTNET,
-        secretKeyEnvVar: 'TREASURY_SECRET',
-      },
-    });
-    console.log(`   ✓ TreasuryAccount criado: ${keypair.publicKey()}`);
-  }
-
-  // ===== Passo 6 — Balances finais =====
+  // ===== Passo 5 — Balances finais =====
   console.log('\n💰 Balances finais:');
   const refreshed = await horizon.loadAccount(keypair.publicKey());
   for (const b of refreshed.balances) {
@@ -125,7 +98,7 @@ async function main(): Promise<void> {
   }
   console.log(`   ${network.stellarExpertBase}/account/${keypair.publicKey()}`);
 
-  // ===== Passo 7 — Instruções finais =====
+  // ===== Passo 6 — Instruções finais =====
   if (generated || !env.VENDOR_KEY_ENCRYPTION_KEY) {
     console.log('\n⚠  Atualize apps/api/.env.local com:\n');
     if (generated) {
@@ -139,12 +112,10 @@ async function main(): Promise<void> {
     console.log();
   }
 
-  console.log('✅ Treasury pronta.\n');
+  console.log('✅ Chave backend pronta.\n');
 }
 
-main()
-  .catch((e) => {
-    console.error('\n❌ Setup falhou:', e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+main().catch((e) => {
+  console.error('\n❌ Setup falhou:', e);
+  process.exit(1);
+});

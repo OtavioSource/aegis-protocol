@@ -7,7 +7,9 @@
  * - 1 Policy default ativa
  * - 1 Agent com API key gerada (exibida UMA vez no console)
  * - 1 Vendor exemplo (sem wallet sponsored — vem na iteração 5)
- * - 1 TreasuryAccount placeholder (chave real é configurada na iteração 5)
+ *
+ * Carteiras (Wallet, modelo não-custodial — ADR 0007) são criadas por company
+ * no onboarding do dashboard, não no seed.
  *
  * Comportamento:
  * - Idempotente via upsert por slug/email único. Re-rodar não duplica nem
@@ -24,13 +26,7 @@
 
 import { randomBytes } from 'node:crypto';
 
-import {
-  AgentStatus,
-  Network,
-  PrismaClient,
-  UserRole,
-  VendorStatus,
-} from '@prisma/client';
+import { AgentStatus, PrismaClient, UserRole, VendorStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const DEMO_PASSWORD = 'admin123';
@@ -169,27 +165,8 @@ async function main(): Promise<void> {
     }));
   console.log(`🏪 Vendor: ${vendor.name} (preferredAsset: ${vendor.preferredAsset})`);
 
-  // ============ TreasuryAccount (singleton, placeholder) ============
-  const placeholderPublicKey =
-    process.env.TREASURY_PUBLIC_KEY && !process.env.TREASURY_PUBLIC_KEY.startsWith('G_REPLACE')
-      ? process.env.TREASURY_PUBLIC_KEY
-      : 'GPLACEHOLDERREPLACEMEATITERATION5SETUPTREASURY';
-
-  const treasury = await prisma.treasuryAccount.upsert({
-    where: { publicKey: placeholderPublicKey },
-    create: {
-      publicKey: placeholderPublicKey,
-      network: Network.TESTNET,
-      secretKeyEnvVar: 'TREASURY_SECRET',
-      auditContractId: null,
-    },
-    update: {},
-  });
-  console.log(`💰 Treasury: ${treasury.publicKey} (network: ${treasury.network})`);
-  if (placeholderPublicKey.startsWith('GPLACEHOLDER')) {
-    console.log('   ⚠  Treasury é placeholder; configure TREASURY_PUBLIC_KEY no .env.local');
-    console.log('      após gerar keypair real na iteração 5 (setup-treasury script).');
-  }
+  // Modelo não-custodial (ADR 0007): não há mais TreasuryAccount global.
+  // Carteiras (Wallet) são criadas por company no onboarding do dashboard.
 
   console.log('\n✅ Seed completo.\n');
   console.log('Próximos passos:');

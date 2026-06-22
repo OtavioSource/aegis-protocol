@@ -12,7 +12,6 @@
  * O que mantém:
  *   - Company "Demo Inc"
  *   - User "demo@demo.com" (login do dashboard)
- *   - TreasuryAccount (singleton; compartilhado entre Companies)
  *
  * O que recria (piso técnico para o dashboard autenticar):
  *   - 1 Policy "Default Policy" (ativa)

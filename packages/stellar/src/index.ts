@@ -29,5 +29,7 @@ export * from './sponsoring.js';
 export * from './payment.js';
 export * from './adapter.js';
 export * from './soroban-audit.js';
+export * from './aegis-signer.js';
+export * from './multisig.js';
 
 export const STELLAR_PACKAGE_VERSION = '0.0.1';

@@ -70,9 +70,23 @@ enum SpendRequestStatus {
   APPROVED_BY_HUMAN
   REJECTED_BY_HUMAN
   EXPIRED
+  // Não-custodial (multisig 5a): policy aprovou, Aegis emitiu o envelope,
+  // aguardando assinatura da agent key via /cosign. Ver ADR 0007 §5.
+  AWAITING_AGENT_SIGNATURE
   EXECUTING
   EXECUTED
   EXECUTION_FAILED
+}
+
+// Espelham @aegis/shared/enums — manter sincronizado.
+enum WalletStatus {
+  PROVISIONING
+  ACTIVE
+}
+
+enum OwnerKeyMode {
+  GENERATED
+  EXTERNAL
 }
 
 enum DecisionType {
@@ -125,6 +139,7 @@ model Company {
   agents          Agent[]
   policies        Policy[]
   vendors         Vendor[]
+  wallets         Wallet[]
   spendRequests   SpendRequest[]
   auditEvents     AuditEvent[]
   fiatDeposits    FiatDeposit[]
@@ -162,6 +177,11 @@ model Agent {
   /// primeiros chars (ex: "cr_a8x9k2j") para listagem segura no dashboard
   apiKeyPrefix   String      @db.VarChar(20)
   activePolicyId String      @db.Uuid
+  /// Carteira (centro de custo) de onde o agente gasta. Ver ADR 0007 §4.
+  walletId       String?     @db.Uuid
+  /// Pubkey Stellar do agente — signer peso 1 na conta da carteira (modelo 5a).
+  /// A secret é gerada client-side e entregue ao dev; só a pubkey é persistida.
+  signerPubKey   String?     @db.VarChar(64)
   status         AgentStatus @default(ACTIVE)
   metadata       Json        @default("{}")
   revokedAt      DateTime?
@@ -170,10 +190,12 @@ model Agent {
 
   company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   activePolicy  Policy         @relation(fields: [activePolicyId], references: [id])
+  wallet        Wallet?        @relation(fields: [walletId], references: [id])
   spendRequests SpendRequest[]
 
   @@index([companyId])
   @@index([apiKeyPrefix])
+  @@index([walletId])
   @@map("agent")
 }
 
@@ -249,6 +271,8 @@ model SpendRequest {
   vendorId       String  @db.Uuid
   /// Resolvido na execução (PROVISIONING wallets ainda não elegíveis)
   vendorWalletId String? @db.Uuid
+  /// Carteira de origem do pagamento (derivada de agent.walletId; persistida p/ auditoria).
+  walletId       String? @db.Uuid
   policyId       String  @db.Uuid
   /// Snapshot do Policy.rules no momento da decisão — auditoria histórica
   policySnapshot Json
@@ -280,6 +304,7 @@ model SpendRequest {
   agent        Agent         @relation(fields: [agentId], references: [id])
   vendor       Vendor        @relation(fields: [vendorId], references: [id])
   vendorWallet VendorWallet? @relation(fields: [vendorWalletId], references: [id])
+  wallet       Wallet?       @relation(fields: [walletId], references: [id])
   policy       Policy        @relation(fields: [policyId], references: [id])
   approval     Approval?
   auditEvents  AuditEvent[]
@@ -328,18 +353,49 @@ model AuditEvent {
   @@map("audit_event")
 }
 
-model TreasuryAccount {
-  id              String   @id @default(uuid()) @db.Uuid
-  publicKey       String   @unique @db.VarChar(64)
-  network         Network
-  /// Nome da env var que guarda a secret. Secret NUNCA é persistida em DB.
-  secretKeyEnvVar String   @db.VarChar(64)
-  /// Soroban contract ID do aegis_audit (após deploy)
-  auditContractId String?  @db.VarChar(64)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+/// Carteira não-custodial (conta Stellar multisig) de uma company. Ver ADR 0007.
+/// Substitui o antigo TreasuryAccount custodial (modelo de pote global removido).
+model Wallet {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @db.Uuid
+  /// Rótulo do centro de custo: "marketing", "devops", etc.
+  label     String  @db.VarChar(120)
+  network   Network @default(TESTNET)
+  /// Endereço da conta = master pubkey do dono. A secret NUNCA é persistida
+  /// (gerada client-side ou trazida pelo dono via Freighter).
+  address   String  @db.VarChar(64)
+  /// GENERATED = Aegis gerou client-side; EXTERNAL = dono trouxe a própria wallet.
+  ownerKeyMode      OwnerKeyMode
+  /// Pubkey do co-signer do Aegis para esta company (peso 1). A secret é derivada
+  /// on-demand (HKDF de seed-raiz + companyId) e NUNCA é persistida. Ver ADR 0007 §8.
+  aegisSignerPubKey String       @db.VarChar(64)
+  status            WalletStatus @default(PROVISIONING)
+  /// Hash da tx de setOptions que aplicou signers + thresholds no onboarding.
+  setupTxHash       String?      @db.VarChar(128)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
-  @@map("treasury_account")
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agents        Agent[]
+  spendRequests SpendRequest[]
+
+  @@unique([companyId, address])
+  @@index([companyId])
+  @@map("wallet")
+}
+
+/// Captação de leads / waitlist da landing. Criada fora do Prisma originalmente;
+/// modelada aqui para o Prisma gerenciá-la e NÃO dropar no db push.
+model Lead {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  role      String?
+  company   String?
+  profile   String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("leads")
 }
 
 model FiatDeposit {
