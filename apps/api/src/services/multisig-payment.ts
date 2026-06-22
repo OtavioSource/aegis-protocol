@@ -62,7 +62,7 @@ export async function prepareSpendRequestEnvelope(
   if (!sr) throw new NotFoundError(`SpendRequest ${spendRequestId} not found`);
 
   // Falha cedo, com motivo claro, se a configuração não-custodial estiver incompleta.
-  const fail = (reason: string) => markFailedPrepare(prisma, app, sr.id, reason);
+  const fail = (reason: string) => markFailedPrepare(prisma, app, sr, reason);
 
   if (!sr.agent.walletId || !sr.wallet) {
     return fail('Agent não tem carteira associada (Agent.walletId). Configure no onboarding.');
@@ -224,19 +224,67 @@ export async function cosignSpendRequest(
   return { status: 'executed', txHash: result.txHash, ledger: result.ledger };
 }
 
-/** Marca EXECUTION_FAILED na fase de preparo (não passou pelo lock EXECUTING). */
+/**
+ * Marca EXECUTION_FAILED na fase de preparo (não passou pelo lock EXECUTING),
+ * com AuditEvent + emit Soroban — simétrico ao markFailedCosign, para que falhas
+ * de configuração (sem carteira/signer, vendor sem wallet, asset ≠ USDC) também
+ * entrem na trilha de auditoria.
+ */
 async function markFailedPrepare(
   prisma: PrismaClient,
   app: FastifyInstance,
-  spendRequestId: string,
+  sr: {
+    id: string;
+    companyId: string;
+    agentId: string;
+    vendorId: string;
+    amountCents: bigint;
+    asset: string;
+    policyId: string;
+    policySnapshot: unknown;
+  },
   reason: string,
 ): Promise<PrepareEnvelopeResult> {
   const truncated = reason.length > 1_000 ? reason.slice(0, 1_000) + '…' : reason;
-  await prisma.spendRequest.update({
-    where: { id: spendRequestId },
-    data: { status: SpendRequestStatus.EXECUTION_FAILED, failureReason: truncated },
+  const [, failedAuditEvent] = await prisma.$transaction([
+    prisma.spendRequest.update({
+      where: { id: sr.id },
+      data: { status: SpendRequestStatus.EXECUTION_FAILED, failureReason: truncated },
+    }),
+    prisma.auditEvent.create({
+      data: {
+        companyId: sr.companyId,
+        spendRequestId: sr.id,
+        eventType: EventType.PAYMENT_FAILED,
+        actor: 'system',
+        payload: {
+          failureReason: truncated,
+          amountCents: Number(sr.amountCents),
+          asset: sr.asset,
+          phase: 'prepare',
+        } as object,
+      },
+    }),
+  ]);
+
+  emitSorobanAuditEvent({
+    prisma,
+    log: app.log,
+    spendRequestId: sr.id,
+    companyId: sr.companyId,
+    agentId: sr.agentId,
+    vendorId: sr.vendorId,
+    amountCents: sr.amountCents,
+    asset: sr.asset,
+    policyId: sr.policyId,
+    policyVersion: (sr.policySnapshot as { version?: number } | null)?.version ?? 1,
+    auditEventId: failedAuditEvent.id,
+    decision: 'ExecutionFailed',
+    reason: truncated,
+    timestampMs: Date.now(),
   });
-  app.log.warn({ spendRequestId, reason: truncated }, 'multisig envelope prepare failed');
+
+  app.log.warn({ spendRequestId: sr.id, reason: truncated }, 'multisig envelope prepare failed');
   return { status: 'failed', failureReason: truncated };
 }
 
