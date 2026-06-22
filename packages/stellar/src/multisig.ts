@@ -34,6 +34,21 @@ export const WALLET_MASTER_WEIGHT = 3;
 export const WALLET_SIGNER_WEIGHT = 1;
 export const WALLET_THRESHOLDS = { low: 1, medium: 2, high: 3 } as const;
 
+/**
+ * Assina um XDR com uma secret Stellar e devolve o XDR assinado. Utilitário
+ * para scripts/serviços que precisam co-assinar (o dono ou o agente assinam
+ * client-side via SDK; isto é o equivalente server-side).
+ */
+export function signTransactionXdr(
+  xdr: string,
+  secret: string,
+  networkPassphrase: string,
+): string {
+  const tx = TransactionBuilder.fromXDR(xdr, networkPassphrase);
+  tx.sign(Keypair.fromSecret(secret));
+  return tx.toXDR();
+}
+
 export interface BuildWalletSetupParams {
   horizon: Horizon.Server;
   network: NetworkConfig;
