@@ -14,8 +14,7 @@ import { z } from 'zod';
 
 import { env } from '../env.js';
 import { ConflictError, NotFoundError } from '../lib/errors.js';
-import { ensureTreasuryBalance } from '../lib/treasury-guard.js';
-import { executeSpendRequestPayment } from '../services/payment-executor.js';
+import { prepareSpendRequestEnvelope } from '../services/multisig-payment.js';
 import { serializeSpendRequest } from '../services/spend-request.js';
 
 const ApprovalBody = z.object({
@@ -51,15 +50,6 @@ const approvalsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         throw new ConflictError(
           `SpendRequest ${sr.id} is in status ${sr.status}; only REQUIRES_APPROVAL can be approved/rejected.`,
         );
-      }
-
-      // Pre-check de saldo (apenas para APPROVED — rejeitar não consome).
-      // Falha antes de criar a Approval pra evitar estado APPROVED_BY_HUMAN + EXECUTION_FAILED.
-      if (body.action === ApprovalAction.APPROVED) {
-        const balanceCheck = await ensureTreasuryBalance(app, sr.asset, Number(sr.amountCents));
-        if (!balanceCheck.ok) {
-          throw new ConflictError(balanceCheck.reason);
-        }
       }
 
       // Determinar novo status
@@ -104,12 +94,14 @@ const approvalsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         }),
       ]);
 
-      // Se aprovado pelo humano, dispara execução on-chain (síncrona).
+      // Não-custodial (5a): aprovação humana NÃO liquida sozinha. Constrói o
+      // envelope canônico e transiciona para AWAITING_AGENT_SIGNATURE; o agente
+      // assina e chama POST /v1/spend-requests/:id/cosign.
       if (body.action === ApprovalAction.APPROVED) {
-        await executeSpendRequestPayment(app.prisma, { app, spendRequestId: sr.id });
+        await prepareSpendRequestEnvelope(app, sr.id);
       }
 
-      // Re-lê para refletir txHash/status pós-execução
+      // Re-lê para refletir envelope/status pós-preparo
       const final = await app.prisma.spendRequest.findUnique({ where: { id: sr.id } });
       return {
         spendRequest: serializeSpendRequest(final ?? updated, {

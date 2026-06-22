@@ -127,6 +127,7 @@ export async function createSpendRequest(
         agentId: agent.id,
         vendorId: vendor.id,
         vendorWalletId: primaryWallet?.id ?? null,
+        walletId: agent.walletId, // carteira (centro de custo) de origem — modelo não-custodial
         policyId: policy.id,
         policySnapshot: policy.rules as object,
         amountCents: BigInt(body.amountCents),
@@ -255,6 +256,9 @@ export function serializeSpendRequest(
     ledger: sr.ledger,
     sorobanEventTxHash: sr.sorobanEventTxHash,
     stellarExpertUrl,
+    // Não-custodial (5a): envelope canônico p/ o agente assinar quando
+    // status = AWAITING_AGENT_SIGNATURE. NULL nos demais estados.
+    envelopeXdr: sr.envelopeXdr,
     createdAt: sr.createdAt,
     evaluatedAt: sr.evaluatedAt,
     executedAt: sr.executedAt,

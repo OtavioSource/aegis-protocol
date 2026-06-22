@@ -291,6 +291,11 @@ model SpendRequest {
   decisionReason String?            @db.Text
   evaluatedAt    DateTime?
 
+  /// Não-custodial (5a): envelope canônico não-assinado emitido pelo Aegis ao
+  /// aprovar. O agente assina e devolve no /cosign; validamos por igualdade de
+  /// hash. NULL fora do fluxo multisig. Ver ADR 0007 §5/§6.
+  envelopeXdr    String?            @db.Text
+
   txHash             String? @db.VarChar(128)
   ledger             Int?
   sorobanEventTxHash String? @db.VarChar(128)

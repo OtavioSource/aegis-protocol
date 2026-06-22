@@ -306,3 +306,53 @@ export async function cosignAndSubmitPayment(
     throw new Error(extractHorizonError(err));
   }
 }
+
+export interface CosignMatchingEnvelopeParams {
+  horizon: Horizon.Server;
+  networkPassphrase: string;
+  /** Co-signer do Aegis (derivado da company). */
+  aegisKeypair: Keypair;
+  /** Envelope canônico **não-assinado** que o Aegis emitiu e persistiu. */
+  expectedEnvelopeXdr: string;
+  /** Envelope devolvido pelo agente, já assinado por ele. */
+  signedXdr: string;
+  /** Pubkey do agente que deve ter assinado. */
+  expectedAgentSignerPubKey: string;
+}
+
+/**
+ * Variante "igualdade ao challenge" (ADR 0007 §6): em vez de validar campo a
+ * campo, exige que o envelope assinado seja **exatamente** o emitido (mesmo
+ * hash de transação — pina destino, valor, asset, memo, fee, sequence e
+ * timeBounds de uma vez). Verifica a assinatura do agente, co-assina e submete.
+ */
+export async function cosignMatchingEnvelope(
+  params: CosignMatchingEnvelopeParams,
+): Promise<CosignAndSubmitResult> {
+  const expected = TransactionBuilder.fromXDR(params.expectedEnvelopeXdr, params.networkPassphrase);
+  const signed = TransactionBuilder.fromXDR(params.signedXdr, params.networkPassphrase);
+  if ('innerTransaction' in signed || 'innerTransaction' in expected) {
+    throw new Error('fee-bump inesperado');
+  }
+  if (!expected.hash().equals(signed.hash())) {
+    throw new Error('envelope assinado diverge do emitido (hash diferente)');
+  }
+  const agentKp = Keypair.fromPublicKey(params.expectedAgentSignerPubKey);
+  const hash = signed.hash();
+  const agentSigned = signed.signatures.some((s) => {
+    try {
+      return agentKp.verify(hash, s.signature());
+    } catch {
+      return false;
+    }
+  });
+  if (!agentSigned) throw new Error('assinatura do agente ausente ou inválida');
+
+  signed.sign(params.aegisKeypair);
+  try {
+    const result = await params.horizon.submitTransaction(signed);
+    return { txHash: result.hash, ledger: result.ledger };
+  } catch (err) {
+    throw new Error(extractHorizonError(err));
+  }
+}

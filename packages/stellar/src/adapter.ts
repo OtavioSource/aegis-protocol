@@ -28,10 +28,15 @@ import type {
 import { ChainType } from '@aegis/shared';
 import { type Horizon, Keypair, TransactionBuilder } from '@stellar/stellar-sdk';
 
+import { deriveAegisSigner } from './aegis-signer.js';
 import { findAnchorAssetIssuer, resolveAnchorToml } from './anchor-toml.js';
-import { resolveAsset } from './assets.js';
+import { centsToAssetString, resolveAsset } from './assets.js';
 import { createHorizonServer } from './horizon.js';
 import { loadTreasuryKey } from './keypair.js';
+import {
+  buildPaymentEnvelope,
+  cosignMatchingEnvelope,
+} from './multisig.js';
 import type { NetworkConfig, NetworkKind } from './network.js';
 import { resolveNetwork } from './network.js';
 import { executePayment, extractHorizonError } from './payment.js';
@@ -48,10 +53,19 @@ import { sponsorVendor } from './sponsoring.js';
 export interface StellarSettlementAdapterOptions {
   network: NetworkKind;
   horizonUrl?: string;
-  /** Secret key Stellar da treasury (S...). Sempre vem de env var. */
+  /**
+   * Secret key Stellar da conta operacional do Aegis (S...). Sempre vem de env var.
+   * Usada como admin do Soroban audit, source/sponsor de setup de carteira e
+   * facilitator x402 — NÃO custodia fundos de usuário (modelo não-custodial).
+   */
   treasurySecret: string;
   /** Domain do anchor SEP-1 (ex: "testanchor.stellar.org"). */
   anchorDomain: string;
+  /**
+   * Seed-raiz (64 hex) para derivar a aegis key (co-signer) por company.
+   * Opcional no boot; obrigatória para co-assinar pagamentos (ADR 0007 §8).
+   */
+  aegisSignerRootSecret?: string;
 }
 
 export class StellarSettlementAdapter implements SettlementAdapter {
@@ -61,6 +75,7 @@ export class StellarSettlementAdapter implements SettlementAdapter {
   private readonly horizon: Horizon.Server;
   private readonly treasuryKeypair: Keypair;
   private readonly anchorDomain: string;
+  private readonly aegisSignerRootSecret?: string;
 
   constructor(options: StellarSettlementAdapterOptions) {
     this.networkConfig = resolveNetwork(options.network, {
@@ -69,10 +84,80 @@ export class StellarSettlementAdapter implements SettlementAdapter {
     this.horizon = createHorizonServer(this.networkConfig);
     this.treasuryKeypair = loadTreasuryKey(options.treasurySecret).keypair;
     this.anchorDomain = options.anchorDomain;
+    this.aegisSignerRootSecret = options.aegisSignerRootSecret;
   }
 
   get treasuryPublicKey(): string {
     return this.treasuryKeypair.publicKey();
+  }
+
+  /** Network ativa (testnet/mainnet) — para callers que precisam montar URLs/links. */
+  get network(): NetworkKind {
+    return this.networkConfig.kind;
+  }
+
+  // ============ Não-custodial multisig (ADR 0007) ============
+
+  /** Deriva a keypair do co-signer do Aegis para uma company (HKDF). */
+  deriveAegisSignerForCompany(companyId: string): Keypair {
+    if (!this.aegisSignerRootSecret) {
+      throw new Error(
+        'AEGIS_SIGNER_ROOT_SECRET não configurado — necessário para derivar a aegis key e co-assinar.',
+      );
+    }
+    return deriveAegisSigner(this.aegisSignerRootSecret, companyId);
+  }
+
+  /** Pubkey do co-signer do Aegis para uma company (para persistir na Wallet). */
+  aegisSignerPubKeyForCompany(companyId: string): string {
+    return this.deriveAegisSignerForCompany(companyId).publicKey();
+  }
+
+  /**
+   * Constrói o envelope canônico de pagamento (XDR não-assinado) a partir da
+   * carteira do dono. Source = `walletAddress`; o Aegis NÃO assina aqui.
+   */
+  async buildPaymentEnvelope(params: {
+    walletAddress: string;
+    destinationPublicKey: string;
+    amountCents: number | bigint;
+    /** Asset code do pagamento (USDC no MVP; outros via path payment é follow-up). */
+    assetCode: string;
+    memoHash: Uint8Array;
+    timeoutSecs?: number;
+  }): Promise<string> {
+    const asset = await resolveAsset(params.assetCode, this.networkConfig.kind, this.anchorDomain);
+    return buildPaymentEnvelope({
+      horizon: this.horizon,
+      network: this.networkConfig,
+      walletAddress: params.walletAddress,
+      destination: params.destinationPublicKey,
+      asset,
+      amount: centsToAssetString(params.amountCents),
+      memoHash: params.memoHash,
+      timeoutSecs: params.timeoutSecs,
+    });
+  }
+
+  /**
+   * Co-assina (com a aegis key da company) o envelope que o agente devolveu,
+   * exigindo igualdade ao envelope emitido (hash), e submete on-chain.
+   */
+  async cosignSpendRequestEnvelope(params: {
+    companyId: string;
+    expectedEnvelopeXdr: string;
+    signedXdr: string;
+    expectedAgentSignerPubKey: string;
+  }): Promise<{ txHash: string; ledger: number }> {
+    const aegisKeypair = this.deriveAegisSignerForCompany(params.companyId);
+    return cosignMatchingEnvelope({
+      horizon: this.horizon,
+      networkPassphrase: this.networkConfig.passphrase,
+      aegisKeypair,
+      expectedEnvelopeXdr: params.expectedEnvelopeXdr,
+      signedXdr: params.signedXdr,
+      expectedAgentSignerPubKey: params.expectedAgentSignerPubKey,
+    });
   }
 
   async sponsorVendor(
