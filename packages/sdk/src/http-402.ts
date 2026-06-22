@@ -22,6 +22,7 @@ export class X402Error extends Error {
       | 'missing_payment_required_header'
       | 'invalid_payment_required_format'
       | 'requires_approval'
+      | 'signer_not_configured'
       | 'payment_execution_failed',
     public readonly detail?: Record<string, unknown>,
   ) {
@@ -116,6 +117,16 @@ export async function payX402(
 
   if (result.status === 'REQUIRES_APPROVAL') {
     throw new X402Error('requires_approval', { requestId: result.id });
+  }
+  // Não-custodial (5a): a policy aprovou e o Aegis emitiu o envelope, mas o
+  // cliente não está configurado com `agentSignerSecret` para co-assinar — então
+  // o pagamento parou em AWAITING_AGENT_SIGNATURE. Erro claro (não é falha de
+  // execução): configure o signer ou assine manualmente via `client.cosign()`.
+  if (result.status === 'AWAITING_AGENT_SIGNATURE') {
+    throw new X402Error('signer_not_configured', {
+      requestId: result.id,
+      hint: 'Configure AegisClient({ agentSignerSecret }) para co-assinar o pagamento.',
+    });
   }
   if (result.status !== 'EXECUTED') {
     throw new X402Error('payment_execution_failed', { reason: result.failureReason });
