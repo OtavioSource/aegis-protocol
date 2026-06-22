@@ -20,6 +20,7 @@ import { OwnerKeyMode } from '@aegis/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
+import { env } from '../env.js';
 import { ConflictError, NotFoundError, ValidationError } from '../lib/errors.js';
 
 /** Pubkey Stellar (Ed25519, StrKey "G..." base32, 56 chars). */
@@ -158,6 +159,8 @@ const walletsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       xlmSponsored,
       createOwnerAccount: !exists,
       signers: agentSignerPubKeys.length + 1, // agentes + aegis (master já existe)
+      // O dono assina o setupXdr client-side com esta passphrase.
+      networkPassphrase: env.STELLAR_NETWORK_PASSPHRASE,
     };
   });
 

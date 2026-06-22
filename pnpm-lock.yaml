@@ -108,6 +108,9 @@ importers:
       '@aegis/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@stellar/stellar-sdk':
+        specifier: ^14.6.1
+        version: 14.6.1
       lucide-react:
         specifier: ^1.17.0
         version: 1.17.0(react@18.3.1)

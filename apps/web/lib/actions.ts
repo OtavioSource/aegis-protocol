@@ -140,13 +140,19 @@ export async function createAgent(_: ActionState, fd: FormData): Promise<ActionS
     const name = str(fd, 'name');
     const activePolicyId = str(fd, 'activePolicyId');
     if (!name || !activePolicyId) return fail('Name and policy required');
-    const created = await api.post<{ apiKey: string }>('/v1/agents', {
+    const created = await api.post<{ apiKey: string; signerSecret: string }>('/v1/agents', {
       name,
       description: str(fd, 'description') || undefined,
       activePolicyId,
     });
     revalidatePath('/agents');
-    return { ok: true, message: 'Agent created.', secret: created.apiKey };
+    // Dois segredos (modelo não-custodial): API key (Bearer cr_) + signer secret
+    // (chave de assinatura Stellar do agente, usada pelo SDK no /cosign).
+    return {
+      ok: true,
+      message: 'Agent created.',
+      secret: `AEGIS_API_KEY=${created.apiKey}\nAEGIS_AGENT_SIGNER_SECRET=${created.signerSecret}`,
+    };
   });
 }
 

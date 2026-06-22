@@ -51,7 +51,9 @@ export function ActionForm({
       {state.secret ? (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
           <p className="text-xs text-amber-300">Save now — shown only once:</p>
-          <code className="mt-1 block break-all text-xs text-amber-200">{state.secret}</code>
+          <code className="mt-1 block whitespace-pre-wrap break-all text-xs text-amber-200">
+            {state.secret}
+          </code>
         </div>
       ) : null}
     </form>
