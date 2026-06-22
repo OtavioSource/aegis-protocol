@@ -68,7 +68,7 @@ function publicAgent(a: {
 const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   // ----- LIST -----
   app.get('/v1/agents', async (request) => {
-    const agent = request.requireAgent();
+    const agent = request.requireAuth();
     const agents = await app.prisma.agent.findMany({
       where: { companyId: agent.companyId },
       orderBy: { createdAt: 'desc' },
@@ -78,7 +78,7 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- GET BY ID -----
   app.get<{ Params: { id: string } }>('/v1/agents/:id', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const found = await app.prisma.agent.findFirst({
       where: { id: request.params.id, companyId: caller.companyId },
     });
@@ -88,7 +88,7 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- CREATE -----
   app.post('/v1/agents', async (request, reply) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const body = CreateAgentBody.parse(request.body);
 
     // Validar que a policy pertence à mesma company
@@ -125,7 +125,7 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- PATCH -----
   app.patch<{ Params: { id: string } }>('/v1/agents/:id', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const body = PatchAgentBody.parse(request.body);
 
     const existing = await app.prisma.agent.findFirst({
@@ -172,7 +172,7 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- ROTATE API KEY -----
   app.post<{ Params: { id: string } }>('/v1/agents/:id/rotate-key', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const existing = await app.prisma.agent.findFirst({
       where: { id: request.params.id, companyId: caller.companyId },
     });
@@ -193,7 +193,7 @@ const agentsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- DELETE (soft delete via status=REVOKED) -----
   app.delete<{ Params: { id: string } }>('/v1/agents/:id', async (request, reply) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const existing = await app.prisma.agent.findFirst({
       where: { id: request.params.id, companyId: caller.companyId },
     });

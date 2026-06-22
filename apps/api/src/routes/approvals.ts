@@ -28,13 +28,20 @@ const approvalsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post<{ Params: { spendRequestId: string } }>(
     '/v1/approvals/:spendRequestId',
     async (request) => {
-      const caller = request.requireAgent();
+      const { companyId } = request.requireAuth();
       const body = ApprovalBody.parse(request.body);
+
+      // Aprovador + actor: o User logado (dashboard) quando presente; senão,
+      // fallback ao primeiro OWNER da Company (caller é agente, sem User direto).
+      const approverUserId = request.user?.sub ?? (await resolveApproverUserId(app, companyId));
+      const actor = request.user
+        ? `user:${request.user.sub}`
+        : `agent:${request.agent?.id ?? 'system'}`;
 
       const sr = await app.prisma.spendRequest.findFirst({
         where: {
           id: request.params.spendRequestId,
-          companyId: caller.companyId,
+          companyId,
         },
       });
       if (!sr) {
@@ -70,11 +77,9 @@ const approvalsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         app.prisma.approval.create({
           data: {
             spendRequestId: sr.id,
-            // No MVP, a Approval referencia o Agent caller via userId placeholder.
-            // Quando o NextAuth chegar (iter 10), userId vira o User real (UUID v4).
-            // Aqui evitamos quebrar a FK omitindo userId não seria possível pois é NOT NULL,
-            // então criamos uma referência ao "primeiro user OWNER da Company" como fallback.
-            userId: await resolveApproverUserId(app, caller.companyId),
+            // Aprovador: User logado (dashboard) quando há sessão; senão fallback
+            // ao primeiro OWNER da Company (caller via agente).
+            userId: approverUserId,
             action: body.action,
             reason: body.reason ?? null,
           },
@@ -85,10 +90,10 @@ const approvalsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         }),
         app.prisma.auditEvent.create({
           data: {
-            companyId: caller.companyId,
+            companyId,
             spendRequestId: sr.id,
             eventType,
-            actor: `agent:${caller.id}`,
+            actor,
             payload: {
               action: body.action,
               reason: body.reason ?? null,
@@ -117,10 +122,10 @@ const approvalsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- GET /v1/approvals/pending -----
   app.get('/v1/approvals/pending', async (request) => {
-    const caller = request.requireAgent();
+    const { companyId } = request.requireAuth();
     const items = await app.prisma.spendRequest.findMany({
       where: {
-        companyId: caller.companyId,
+        companyId,
         status: SpendRequestStatus.REQUIRES_APPROVAL,
       },
       orderBy: { createdAt: 'asc' },

@@ -63,6 +63,13 @@ const EnvSchema = z.object({
   // Auth / Web
   NEXTAUTH_SECRET: z.string().optional(),
   NEXTAUTH_URL: z.string().url().optional(),
+  /**
+   * Secret para assinar/verificar o session token do dashboard (humano).
+   * Só a API usa (emite no login, valida nas rotas). Sem ele, o login do
+   * dashboard falha ao emitir token. Gerar com:
+   *   node -e "console.log(crypto.randomBytes(32).toString('hex'))"
+   */
+  SESSION_JWT_SECRET: z.string().optional(),
 
   // Tuning
   SEP24_POLLING_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),

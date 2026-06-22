@@ -13,6 +13,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { UnauthorizedError } from '../lib/errors.js';
+import { mintSessionToken } from '../lib/session-token.js';
 
 const LoginBody = z.object({
   email: z.string().email(),
@@ -45,6 +46,15 @@ const authRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       select: { name: true },
     });
 
+    // Token de sessão assinado pela API — o web reencaminha em `Authorization`
+    // nas chamadas seguintes (desacopla o dashboard das API keys de agente).
+    const sessionToken = mintSessionToken({
+      sub: user.id,
+      companyId: user.companyId,
+      role: user.role,
+      email: user.email,
+    });
+
     return {
       id: user.id,
       email: user.email,
@@ -52,6 +62,7 @@ const authRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       role: user.role,
       companyId: user.companyId,
       companyName: company?.name ?? null,
+      sessionToken,
     };
   });
 };

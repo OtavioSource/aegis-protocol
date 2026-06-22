@@ -39,6 +39,7 @@ export const authOptions: NextAuthOptions = {
           role: string;
           companyId: string;
           companyName: string | null;
+          sessionToken: string;
         };
         return {
           id: u.id,
@@ -47,6 +48,7 @@ export const authOptions: NextAuthOptions = {
           role: u.role,
           companyId: u.companyId,
           companyName: u.companyName,
+          sessionToken: u.sessionToken,
         };
       },
     }),
@@ -57,6 +59,9 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role;
         token.companyId = user.companyId;
         token.companyName = user.companyName;
+        // Guarda o token da Aegis API no JWT (cookie httpOnly criptografado).
+        // NÃO é copiado para a Session (callback abaixo), então não chega ao browser.
+        token.sessionToken = user.sessionToken;
       }
       return token;
     },

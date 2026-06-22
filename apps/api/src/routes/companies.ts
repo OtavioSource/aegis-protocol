@@ -11,9 +11,9 @@ import { NotFoundError } from '../lib/errors.js';
 
 const companiesRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get('/v1/companies/me', async (request) => {
-    const agent = request.requireAgent();
+    const caller = request.requireAuth();
     const company = await app.prisma.company.findUnique({
-      where: { id: agent.companyId },
+      where: { id: caller.companyId },
       select: {
         id: true,
         name: true,
@@ -23,7 +23,7 @@ const companiesRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         createdAt: true,
       },
     });
-    if (!company) throw new NotFoundError(`Company ${agent.companyId} not found`);
+    if (!company) throw new NotFoundError(`Company ${caller.companyId} not found`);
     return company;
   });
 };

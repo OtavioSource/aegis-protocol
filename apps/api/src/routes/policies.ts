@@ -31,7 +31,7 @@ const PatchPolicyBody = z.object({
 const policiesRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   // ----- LIST (apenas active por default; ?all=true para histórico) -----
   app.get<{ Querystring: { all?: string } }>('/v1/policies', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const includeInactive = request.query.all === 'true';
     const policies = await app.prisma.policy.findMany({
       where: {
@@ -45,7 +45,7 @@ const policiesRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- GET BY ID -----
   app.get<{ Params: { id: string } }>('/v1/policies/:id', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const found = await app.prisma.policy.findFirst({
       where: { id: request.params.id, companyId: caller.companyId },
     });
@@ -55,7 +55,7 @@ const policiesRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- CREATE (v1 nova) -----
   app.post('/v1/policies', async (request, reply) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const body = CreatePolicyBody.parse(request.body);
     const created = await app.prisma.policy.create({
       data: {
@@ -72,7 +72,7 @@ const policiesRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- NEW VERSION (deactiva anterior, cria N+1) -----
   app.post<{ Params: { id: string } }>('/v1/policies/:id/new-version', async (request, reply) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const body = NewVersionBody.parse(request.body);
 
     const existing = await app.prisma.policy.findFirst({
@@ -105,7 +105,7 @@ const policiesRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- PATCH (toggle isActive; conteúdo segue imutável) -----
   app.patch<{ Params: { id: string } }>('/v1/policies/:id', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const body = PatchPolicyBody.parse(request.body);
 
     const existing = await app.prisma.policy.findFirst({

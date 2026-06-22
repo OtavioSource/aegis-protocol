@@ -22,6 +22,7 @@ import fp from 'fastify-plugin';
 import { LRUCache } from 'lru-cache';
 
 import { UnauthorizedError } from '../lib/errors.js';
+import { verifySessionToken, type VerifiedSession } from '../lib/session-token.js';
 
 const API_KEY_PREFIX_LENGTH = 11; // "cr_" + 8 chars
 const CACHE_MAX = 1_000;
@@ -45,8 +46,15 @@ declare module 'fastify' {
 
   interface FastifyRequest {
     agent?: Agent;
+    /** Humano autenticado via session token (dashboard). Mutuamente exclusivo com `agent`. */
+    user?: VerifiedSession;
     companyId?: string;
     requireAgent(): Agent;
+    /**
+     * Exige auth de **agente OU usuário**. Devolve o `companyId` do tenant.
+     * Usar nas rotas de gestão do dashboard (não precisam da identidade do agente).
+     */
+    requireAuth(): { companyId: string };
   }
 }
 
@@ -67,12 +75,21 @@ const authAgentPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   app.decorateRequest('agent', undefined);
+  app.decorateRequest('user', undefined);
   app.decorateRequest('companyId', undefined);
   app.decorateRequest('requireAgent', function (this: FastifyRequest): Agent {
     if (!this.agent) {
       throw new UnauthorizedError('Authentication required (Bearer cr_<apiKey>)');
     }
     return this.agent;
+  });
+  app.decorateRequest('requireAuth', function (this: FastifyRequest): { companyId: string } {
+    if (!this.companyId) {
+      throw new UnauthorizedError(
+        'Authentication required (Bearer cr_<apiKey> or session token)',
+      );
+    }
+    return { companyId: this.companyId };
   });
 
   app.addHook('preHandler', async (request) => {
@@ -81,37 +98,45 @@ const authAgentPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       return; // sem auth — request continua, rotas decidem se exigem
     }
 
-    const apiKey = authHeader.slice('Bearer '.length).trim();
-    if (!apiKey.startsWith('cr_')) {
-      throw new UnauthorizedError('Invalid Authorization header format. Expected "Bearer cr_…"');
-    }
+    const token = authHeader.slice('Bearer '.length).trim();
 
-    // Cache hit
-    const cached = cache.get(apiKey);
-    if (cached) {
-      request.agent = cached;
-      request.companyId = cached.companyId;
-      return;
-    }
-
-    // Cache miss → DB lookup + bcrypt (filter on status=ACTIVE — REVOKED/SUSPENDED
-    // são rejeitados mesmo se a key bater).
-    const prefix = apiKey.slice(0, API_KEY_PREFIX_LENGTH);
-    const candidates = await app.prisma.agent.findMany({
-      where: { apiKeyPrefix: prefix, status: 'ACTIVE' },
-    });
-
-    for (const candidate of candidates) {
-      const matches = await bcrypt.compare(apiKey, candidate.apiKeyHash);
-      if (matches) {
-        cache.set(apiKey, candidate);
-        request.agent = candidate;
-        request.companyId = candidate.companyId;
+    // ===== Agente: Bearer cr_… =====
+    if (token.startsWith('cr_')) {
+      // Cache hit
+      const cached = cache.get(token);
+      if (cached) {
+        request.agent = cached;
+        request.companyId = cached.companyId;
         return;
       }
+
+      // Cache miss → DB lookup + bcrypt (filter on status=ACTIVE — REVOKED/SUSPENDED
+      // são rejeitados mesmo se a key bater).
+      const prefix = token.slice(0, API_KEY_PREFIX_LENGTH);
+      const candidates = await app.prisma.agent.findMany({
+        where: { apiKeyPrefix: prefix, status: 'ACTIVE' },
+      });
+
+      for (const candidate of candidates) {
+        const matches = await bcrypt.compare(token, candidate.apiKeyHash);
+        if (matches) {
+          cache.set(token, candidate);
+          request.agent = candidate;
+          request.companyId = candidate.companyId;
+          return;
+        }
+      }
+
+      throw new UnauthorizedError('Invalid API key');
     }
 
-    throw new UnauthorizedError('Invalid API key');
+    // ===== Humano (dashboard): session token assinado =====
+    const session = verifySessionToken(token);
+    if (!session) {
+      throw new UnauthorizedError('Invalid or expired session token');
+    }
+    request.user = session;
+    request.companyId = session.companyId;
   });
 };
 

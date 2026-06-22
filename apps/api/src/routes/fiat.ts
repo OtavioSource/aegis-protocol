@@ -112,7 +112,7 @@ const ListQuery = z.object({
 const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   // ----- POST /v1/fiat/deposits (seletor provider) -----
   app.post('/v1/fiat/deposits', async (request, reply) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     // Default `provider` = "sep24" aplicado antes do parse (discriminador exige literal puro)
     const rawBody = (request.body ?? {}) as Record<string, unknown>;
     const body = InitiateDepositBody.parse({
@@ -191,7 +191,7 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- GET /v1/fiat/deposits -----
   app.get('/v1/fiat/deposits', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const query = ListQuery.parse(request.query);
 
     const items = await app.prisma.fiatDeposit.findMany({
@@ -210,7 +210,7 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- GET /v1/fiat/deposits/:id (router por anchorId) -----
   app.get<{ Params: { id: string } }>('/v1/fiat/deposits/:id', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const existing = await app.prisma.fiatDeposit.findFirst({
       where: { id: request.params.id, companyId: caller.companyId },
     });
@@ -224,7 +224,7 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post<{ Params: { id: string } }>(
     '/v1/fiat/deposits/:id/refresh',
     async (request) => {
-      const caller = request.requireAgent();
+      const caller = request.requireAuth();
       const existing = await app.prisma.fiatDeposit.findFirst({
         where: { id: request.params.id, companyId: caller.companyId },
       });
@@ -239,7 +239,7 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post<{ Params: { id: string } }>(
     '/v1/fiat/deposits/:id/simulate',
     async (request) => {
-      const caller = request.requireAgent();
+      const caller = request.requireAuth();
       const existing = await app.prisma.fiatDeposit.findFirst({
         where: { id: request.params.id, companyId: caller.companyId },
       });
@@ -266,7 +266,7 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- POST /v1/fiat/withdrawals (off-ramp Etherfuse) -----
   app.post('/v1/fiat/withdrawals', async (request, reply) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const body = InitiateWithdrawalBody.parse(request.body ?? {});
 
     const owner = await app.prisma.user.findFirst({
@@ -319,7 +319,7 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- GET /v1/fiat/withdrawals -----
   app.get('/v1/fiat/withdrawals', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const query = ListQuery.parse(request.query);
 
     const items = await app.prisma.fiatWithdrawal.findMany({
@@ -338,7 +338,7 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- GET /v1/fiat/withdrawals/:id -----
   app.get<{ Params: { id: string } }>('/v1/fiat/withdrawals/:id', async (request) => {
-    const caller = request.requireAgent();
+    const caller = request.requireAuth();
     const existing = await app.prisma.fiatWithdrawal.findFirst({
       where: { id: request.params.id, companyId: caller.companyId },
     });
@@ -352,7 +352,7 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post<{ Params: { id: string } }>(
     '/v1/fiat/withdrawals/:id/refresh',
     async (request) => {
-      const caller = request.requireAgent();
+      const caller = request.requireAuth();
       const existing = await app.prisma.fiatWithdrawal.findFirst({
         where: { id: request.params.id, companyId: caller.companyId },
       });

@@ -17,7 +17,7 @@ import {
   type SpendRequestInput,
 } from '@aegis/shared';
 import { DecisionType } from '@aegis/shared';
-import { SpendRequestStatus } from '@prisma/client';
+import { type Agent, SpendRequestStatus } from '@prisma/client';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
@@ -42,20 +42,28 @@ const ListQuery = z.object({
 const spendRequestsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   // ----- POST /v1/spend-requests -----
   app.post('/v1/spend-requests', async (request, reply) => {
-    const caller = request.requireAgent();
+    const { companyId } = request.requireAuth();
     const idempotencyKey = extractIdempotencyKey(
       request.headers['idempotency-key'] as string | undefined,
     );
     const body: SpendRequestInput = SpendRequestInputSchema.parse(request.body);
 
-    // Resolve which Agent the spend is submitted on behalf of.
-    // - Default: the caller (Bearer token's Agent).
-    // - If body.agentId is set, swap to that Agent — only if it belongs to the
-    //   same Company and is ACTIVE. This is the dashboard's "act as agent" flow.
-    let agent = caller;
-    if (body.agentId && body.agentId !== caller.id) {
+    // Resolve em nome de qual Agent o spend é submetido:
+    // - Caller é Agent e não pediu outro agentId → o próprio caller.
+    // - Caller é User (dashboard) OU pediu outro agentId → resolve por `agentId`
+    //   (obrigatório quando o caller é usuário, pois não há agente implícito),
+    //   validando que pertence à mesma Company e está ACTIVE ("act as agent").
+    let agent: Agent;
+    if (request.agent && (!body.agentId || body.agentId === request.agent.id)) {
+      agent = request.agent;
+    } else {
+      if (!body.agentId) {
+        throw new ValidationError(
+          'agentId is required when authenticating as a user (dashboard).',
+        );
+      }
       const target = await app.prisma.agent.findFirst({
-        where: { id: body.agentId, companyId: caller.companyId },
+        where: { id: body.agentId, companyId },
       });
       if (!target) {
         throw new ValidationError(`Agent ${body.agentId} not found in this Company.`);
@@ -135,12 +143,12 @@ const spendRequestsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- GET /v1/spend-requests -----
   app.get('/v1/spend-requests', async (request) => {
-    const agent = request.requireAgent();
+    const { companyId } = request.requireAuth();
     const query = ListQuery.parse(request.query);
 
     const items = await app.prisma.spendRequest.findMany({
       where: {
-        companyId: agent.companyId,
+        companyId,
         ...(query.status ? { status: query.status } : {}),
         ...(query.agentId ? { agentId: query.agentId } : {}),
         ...(query.vendorId ? { vendorId: query.vendorId } : {}),
@@ -158,9 +166,9 @@ const spendRequestsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- GET /v1/spend-requests/:id -----
   app.get<{ Params: { id: string } }>('/v1/spend-requests/:id', async (request) => {
-    const agent = request.requireAgent();
+    const { companyId } = request.requireAuth();
     const found = await app.prisma.spendRequest.findFirst({
-      where: { id: request.params.id, companyId: agent.companyId },
+      where: { id: request.params.id, companyId },
     });
     if (!found) throw new NotFoundError(`SpendRequest ${request.params.id} not found`);
     return serializeSpendRequest(found, {
