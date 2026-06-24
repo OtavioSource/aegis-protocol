@@ -114,6 +114,27 @@ export class StellarSettlementAdapter implements SettlementAdapter {
     return this.deriveAegisSignerForCompany(companyId).publicKey();
   }
 
+  /**
+   * Saldos USDC + XLM de uma conta qualquer (carteira do dono). Retorna `null`
+   * se a conta ainda não existe on-chain (ex.: carteira GENERATED PROVISIONING).
+   */
+  async getAccountBalances(address: string): Promise<{ usdc: string; xlm: string } | null> {
+    let account;
+    try {
+      account = await this.horizon.loadAccount(address);
+    } catch {
+      return null;
+    }
+    const native = account.balances.find((b) => b.asset_type === 'native');
+    const usdc = account.balances.find(
+      (b) =>
+        b.asset_type !== 'native' &&
+        'asset_code' in b &&
+        (b as { asset_code: string }).asset_code === 'USDC',
+    );
+    return { xlm: native?.balance ?? '0', usdc: usdc?.balance ?? '0' };
+  }
+
   /** True se a conta já existe on-chain (decide createOwnerAccount no setup). */
   async accountExists(address: string): Promise<boolean> {
     try {

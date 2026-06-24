@@ -96,14 +96,21 @@ const walletsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     return publicWallet(created);
   });
 
-  // ----- LIST -----
+  // ----- LIST (com saldos on-chain USDC/XLM por carteira) -----
   app.get('/v1/wallets', async (request) => {
     const { companyId } = request.requireAuth();
     const wallets = await app.prisma.wallet.findMany({
       where: { companyId },
       orderBy: { createdAt: 'desc' },
     });
-    return { data: wallets.map(publicWallet) };
+    const data = await Promise.all(
+      wallets.map(async (w) => ({
+        ...publicWallet(w),
+        // Saldo on-chain (resiliente: null se a conta não existe / Horizon falha).
+        balances: await app.stellar.getAccountBalances(w.address).catch(() => null),
+      })),
+    );
+    return { data };
   });
 
   // ----- GET BY ID -----

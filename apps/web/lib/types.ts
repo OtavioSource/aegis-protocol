@@ -61,6 +61,8 @@ export type Wallet = {
   status: 'PROVISIONING' | 'ACTIVE';
   setupTxHash: string | null;
   createdAt: string;
+  /** Saldo on-chain (null se a conta ainda não existe). */
+  balances?: { usdc: string; xlm: string } | null;
 };
 
 export type VendorWallet = {

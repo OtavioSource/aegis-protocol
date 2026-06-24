@@ -336,6 +336,27 @@ export function fmtCents(cents: number | null | undefined): string {
   return `$${formatted}`;
 }
 
+/** Stablecoins exibem 2 casas decimais; o resto (cripto volátil) até 7. */
+const STABLECOINS = new Set(['USDC', 'USDT', 'EURC', 'USD', 'DAI', 'BUSD', 'TESOURO']);
+
+/**
+ * Formata um saldo de asset (string/numérico do Horizon). Stablecoins (USDC…)
+ * em 2 casas; cripto volátil (XLM…) em até 7 (sem zeros à direita supérfluos).
+ */
+export function fmtAssetAmount(
+  amount: string | number | null | undefined,
+  code: string,
+): string {
+  if (amount === null || amount === undefined || amount === '') return '—';
+  const n = typeof amount === 'string' ? Number(amount) : amount;
+  if (!Number.isFinite(n)) return '—';
+  const stable = STABLECOINS.has(code.toUpperCase());
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: stable ? 2 : 0,
+    maximumFractionDigits: stable ? 2 : 7,
+  });
+}
+
 export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('en-US', {

@@ -1,5 +1,5 @@
 import { ActionForm } from '@/components/action-form';
-import { EmptyState, fmtDate, PageHeader, SectionCard, StatusBadge, Table, Td, Th, THead, Tr } from '@/components/ui';
+import { EmptyState, fmtAssetAmount, fmtDate, PageHeader, SectionCard, StatusBadge, Table, Td, Th, THead, Tr } from '@/components/ui';
 import { WalletOnboarding } from '@/components/wallet-onboarding';
 import { deleteWallet } from '@/lib/actions';
 import { api } from '@/lib/api';
@@ -45,6 +45,7 @@ export default async function WalletsPage() {
               <Th>Endereço</Th>
               <Th>Origem</Th>
               <Th>Agentes</Th>
+              <Th>Saldo</Th>
               <Th>Status</Th>
               <Th>Criada</Th>
               <Th>Ações</Th>
@@ -64,6 +65,16 @@ export default async function WalletsPage() {
                   <span className="text-xs text-slate-300">
                     {(agentsByWallet.get(w.id) ?? []).join(', ') || '—'}
                   </span>
+                </Td>
+                <Td>
+                  {w.balances ? (
+                    <span className="tabular-nums text-xs">
+                      <span className="text-accent">${fmtAssetAmount(w.balances.usdc, 'USDC')}</span>
+                      <span className="text-slate-500"> · {fmtAssetAmount(w.balances.xlm, 'XLM')} XLM</span>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-500">—</span>
+                  )}
                 </Td>
                 <Td>
                   <StatusBadge status={w.status} />
