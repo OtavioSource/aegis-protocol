@@ -6,14 +6,15 @@
  * O ponto do não-custodial: a master key nasce/assina no NAVEGADOR do usuário.
  * No modo GENERATED, geramos a keypair localmente (Keypair.random) — a secret
  * NUNCA é enviada ao servidor; só a pubkey vai à API. O usuário faz backup.
- * No modo EXTERNAL, o usuário traz a própria wallet (pubkey) e assina o setup
- * fora (Freighter/lab), colando o XDR assinado de volta.
+ * No modo EXTERNAL, o usuário conecta a própria wallet via Stellar Wallets Kit
+ * (Freighter, xBull, Albedo, Rabet, Hana, LOBSTR…) e assina o setup direto pela
+ * wallet — sem colar XDR à mão. Mantém um fallback de colar o XDR assinado.
  *
  * Fluxo: createWallet → buildWalletSetup → (dono assina) → submitWalletSetup.
  */
 
 import { Keypair, TransactionBuilder } from '@stellar/stellar-sdk';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
   buildWalletSetup,
@@ -56,6 +57,63 @@ export function WalletOnboarding({ agents }: { agents: Agent[] }) {
   const [pastedSignedXdr, setPastedSignedXdr] = useState('');
   const [resultTxHash, setResultTxHash] = useState('');
 
+  // EXTERNAL via Stellar Wallets Kit (Freighter/xBull/Albedo/…)
+  const [walletConnected, setWalletConnected] = useState(false);
+  const kitReady = useRef(false);
+
+  /** Carrega + inicializa o kit (uma vez) via dynamic import (client-only, evita SSR).
+   *  Os módulos de wallet vivem em subpaths (`/modules/*`), não no barrel principal. */
+  async function loadKit() {
+    const [core, freighter, xbull, albedo, rabet, hana, lobstr] = await Promise.all([
+      import('@creit.tech/stellar-wallets-kit'),
+      import('@creit.tech/stellar-wallets-kit/modules/freighter'),
+      import('@creit.tech/stellar-wallets-kit/modules/xbull'),
+      import('@creit.tech/stellar-wallets-kit/modules/albedo'),
+      import('@creit.tech/stellar-wallets-kit/modules/rabet'),
+      import('@creit.tech/stellar-wallets-kit/modules/hana'),
+      import('@creit.tech/stellar-wallets-kit/modules/lobstr'),
+    ]);
+    if (!kitReady.current) {
+      core.StellarWalletsKit.init({
+        network: core.Networks.TESTNET,
+        selectedWalletId: freighter.FREIGHTER_ID,
+        modules: [
+          new freighter.FreighterModule(),
+          new xbull.xBullModule(),
+          new albedo.AlbedoModule(),
+          new rabet.RabetModule(),
+          new hana.HanaModule(),
+          new lobstr.LobstrModule(),
+        ],
+      });
+      kitReady.current = true;
+    }
+    return core.StellarWalletsKit;
+  }
+
+  /** Abre o modal de seleção de wallet e preenche o endereço conectado. */
+  async function connectWallet() {
+    setError('');
+    try {
+      const kit = await loadKit();
+      const { address } = await kit.authModal();
+      setExternalAddress(address);
+      setWalletConnected(true);
+    } catch (e) {
+      setError('Conexão cancelada / falhou: ' + errMsg(e));
+    }
+  }
+
+  /** Assina o XDR de setup pela wallet conectada. */
+  async function signWithConnectedWallet(xdr: string, passphrase: string): Promise<string> {
+    const kit = await loadKit();
+    const { signedTxXdr } = await kit.signTransaction(xdr, {
+      networkPassphrase: passphrase,
+      address: externalAddress,
+    });
+    return signedTxXdr;
+  }
+
   function reset() {
     setPhase('form');
     setLabel('');
@@ -71,6 +129,7 @@ export function WalletOnboarding({ agents }: { agents: Agent[] }) {
     setNetworkPassphrase('');
     setPastedSignedXdr('');
     setResultTxHash('');
+    setWalletConnected(false);
   }
 
   function toggleAgent(id: string) {
@@ -114,8 +173,14 @@ export function WalletOnboarding({ agents }: { agents: Agent[] }) {
         const done = await submitWalletSetup(wallet.id, signed);
         setResultTxHash(done.setupTxHash ?? '');
         setPhase('done');
+      } else if (walletConnected) {
+        // EXTERNAL conectado: assina pela wallet (Freighter/xBull/…) e submete.
+        const signed = await signWithConnectedWallet(setup.setupXdr, setup.networkPassphrase);
+        const done = await submitWalletSetup(wallet.id, signed);
+        setResultTxHash(done.setupTxHash ?? '');
+        setPhase('done');
       } else {
-        // EXTERNAL: usuário assina fora e cola o XDR.
+        // EXTERNAL fallback: usuário assina fora (Lab) e cola o XDR.
         setPhase('await-external-sign');
       }
     } catch (e) {
@@ -287,12 +352,28 @@ export function WalletOnboarding({ agents }: { agents: Agent[] }) {
           </div>
 
           {mode === 'EXTERNAL' && (
-            <div>
-              <span className="text-xs text-slate-500">Endereço (public key) da sua wallet</span>
+            <div className="space-y-2">
+              <span className="text-xs text-slate-500">Sua wallet (Freighter, xBull, Albedo, Rabet, Hana, LOBSTR…)</span>
+              <div className="flex items-center gap-2">
+                <button type="button" className={btnSubtle} onClick={() => void connectWallet()}>
+                  {walletConnected ? '✓ Conectada — trocar' : 'Conectar carteira'}
+                </button>
+                {walletConnected && (
+                  <span className="text-xs text-emerald-400">
+                    {externalAddress.slice(0, 6)}…{externalAddress.slice(-4)} — vai assinar pela wallet
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] text-slate-500">
+                ou cole o endereço manualmente (aí você assina o XDR fora e cola de volta):
+              </span>
               <input
                 className={input}
                 value={externalAddress}
-                onChange={(e) => setExternalAddress(e.target.value)}
+                onChange={(e) => {
+                  setExternalAddress(e.target.value);
+                  setWalletConnected(false);
+                }}
                 placeholder="G…"
               />
             </div>

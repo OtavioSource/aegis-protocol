@@ -185,6 +185,19 @@ export async function sponsorWallet(_: ActionState, fd: FormData): Promise<Actio
   });
 }
 
+// ----------------------------------------------------- wallet lifecycle ----
+
+export async function deleteWallet(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = str(fd, 'walletId');
+    if (!id) return fail('walletId required');
+    await api.del(`/v1/wallets/${id}`);
+    revalidatePath('/wallets');
+    revalidatePath('/agents');
+    return { ok: true, message: 'Carteira removida — agentes liberados.' };
+  });
+}
+
 // ---------------------------------------------------- policy lifecycle ----
 
 export async function togglePolicy(_: ActionState, fd: FormData): Promise<ActionState> {

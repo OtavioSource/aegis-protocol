@@ -188,6 +188,27 @@ const walletsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       return publicWallet(updated);
     },
   );
+
+  // ----- DELETE (só PROVISIONING; libera agentes + o endereço) -----
+  // Permite limpar uma carteira cujo setup não foi finalizado, para reutilizar
+  // os agentes e o endereço. Agentes/spend-requests que apontavam para ela têm
+  // walletId zerado (FK onDelete: SetNull). Carteira ACTIVE não é removível
+  // (tem multisig on-chain + histórico).
+  app.delete<{ Params: { id: string } }>('/v1/wallets/:id', async (request, reply) => {
+    const { companyId } = request.requireAuth();
+    const wallet = await app.prisma.wallet.findFirst({
+      where: { id: request.params.id, companyId },
+    });
+    if (!wallet) throw new NotFoundError(`Wallet ${request.params.id} not found`);
+    if (wallet.status === WalletStatus.ACTIVE) {
+      throw new ConflictError(
+        'Carteira ACTIVE não pode ser removida (multisig on-chain + histórico). ' +
+          'Para parar de usá-la, desvincule os agentes ou remova o aegis signer on-chain.',
+      );
+    }
+    await app.prisma.wallet.delete({ where: { id: wallet.id } });
+    reply.code(204);
+  });
 };
 
 export default walletsRoute;

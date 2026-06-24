@@ -1,5 +1,7 @@
+import { ActionForm } from '@/components/action-form';
 import { EmptyState, fmtDate, PageHeader, SectionCard, StatusBadge, Table, Td, Th, THead, Tr } from '@/components/ui';
 import { WalletOnboarding } from '@/components/wallet-onboarding';
+import { deleteWallet } from '@/lib/actions';
 import { api } from '@/lib/api';
 import type { Agent, Listed, Wallet } from '@/lib/types';
 
@@ -45,6 +47,7 @@ export default async function WalletsPage() {
               <Th>Agentes</Th>
               <Th>Status</Th>
               <Th>Criada</Th>
+              <Th>Ações</Th>
             </Tr>
           </THead>
           <tbody>
@@ -66,6 +69,15 @@ export default async function WalletsPage() {
                   <StatusBadge status={w.status} />
                 </Td>
                 <Td>{fmtDate(w.createdAt)}</Td>
+                <Td>
+                  {w.status === 'PROVISIONING' ? (
+                    <ActionForm action={deleteWallet} submitLabel="Remover" submitVariant="danger">
+                      <input type="hidden" name="walletId" value={w.id} />
+                    </ActionForm>
+                  ) : (
+                    '—'
+                  )}
+                </Td>
               </Tr>
             ))}
           </tbody>
