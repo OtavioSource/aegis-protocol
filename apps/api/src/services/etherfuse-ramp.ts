@@ -43,8 +43,10 @@ export interface InitiateEtherfuseDepositInput {
   sourceAsset: string;
   /** Quantidade em smallest unit da source (centavos BRL, etc.). */
   sourceAmountCents: number;
-  /** Public key da treasury (recebe o asset). */
-  treasuryPublicKey: string;
+  /** Carteira não-custodial de destino do crédito. */
+  walletId: string;
+  /** Endereço (public key) da carteira de destino — recebe o asset on-chain. */
+  destinationPublicKey: string;
   /** customerId Etherfuse (vem do .env). */
   customerId: string;
   /** bankAccountId Etherfuse (gerado no registerCustomer, vem do .env). */
@@ -72,7 +74,8 @@ export async function initiateEtherfuseDeposit(
     targetAssetIdentifier,
     sourceAsset,
     sourceAmountCents,
-    treasuryPublicKey,
+    walletId,
+    destinationPublicKey,
     customerId,
     bankAccountId,
     client,
@@ -80,6 +83,17 @@ export async function initiateEtherfuseDeposit(
 
   const sourceAmountString = (sourceAmountCents / 100).toFixed(2);
   const quoteId = crypto.randomUUID();
+
+  // 0. Garante a carteira de destino registrada na org (idempotente; sob a org
+  //    KYB-aprovada volta com kycStatus=approved → pode receber on-ramp).
+  try {
+    await client.registerWallet(destinationPublicKey);
+  } catch (err) {
+    app.log.warn(
+      { destinationPublicKey, err: (err as Error).message },
+      'etherfuse registerWallet falhou (pode já existir) — seguindo para o quote',
+    );
+  }
 
   // 1. Cria quote (sem walletAddress — vai no publicKey do order)
   let quote;
@@ -104,7 +118,7 @@ export async function initiateEtherfuseDeposit(
   try {
     order = await client.createOrder({
       quoteId: quote.quoteId,
-      publicKey: treasuryPublicKey,
+      publicKey: destinationPublicKey,
       bankAccountId,
     });
   } catch (err) {
@@ -117,6 +131,7 @@ export async function initiateEtherfuseDeposit(
     data: {
       companyId,
       userId,
+      walletId,
       anchorId,
       anchorTransactionId: order.orderId,
       interactiveUrl: null, // Etherfuse não usa interactive URL

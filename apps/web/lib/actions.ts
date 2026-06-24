@@ -24,9 +24,9 @@ function intOrNull(fd: FormData, key: string): number | null {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 }
 
-/** Converte valor em dólares (string como "50" ou "12.34") para centavos arredondados. */
+/** Converte valor (string como "50", "12.34" ou "80,50") para centavos arredondados. */
 function dollarsToCents(fd: FormData, key: string): number | null {
-  const v = str(fd, key);
+  const v = str(fd, key).replace(',', '.'); // aceita vírgula decimal (pt-BR)
   if (v === '') return null;
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) return null;
@@ -258,12 +258,16 @@ export async function initiateDeposit(_: ActionState, fd: FormData): Promise<Act
   return run(async () => {
     const provider = str(fd, 'provider') || 'etherfuse';
     if (provider === 'etherfuse') {
-      const sourceAmountCents = intOrNull(fd, 'sourceAmountCents');
+      const walletId = str(fd, 'walletId');
+      if (!walletId) return fail('Selecione a carteira de destino.');
+      // Usuário digita o valor (ex.: "80" ou "80,50"); convertemos para centavos.
+      const sourceAmountCents = dollarsToCents(fd, 'amount');
       if (!sourceAmountCents || sourceAmountCents <= 0) {
-        return fail('sourceAmountCents must be positive');
+        return fail('Informe um valor positivo.');
       }
       await api.post('/v1/fiat/deposits', {
         provider: 'etherfuse',
+        walletId,
         sourceAsset: str(fd, 'sourceAsset') || 'BRL',
         sourceAmountCents,
         asset: str(fd, 'asset') || 'USDC',

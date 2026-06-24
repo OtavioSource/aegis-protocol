@@ -22,7 +22,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { env } from '../env.js';
-import { ConflictError, NotFoundError, StellarError } from '../lib/errors.js';
+import { ConflictError, NotFoundError, StellarError, ValidationError } from '../lib/errors.js';
 import {
   initiateEtherfuseWithdrawal,
   pollAndSyncEtherfuseWithdrawal,
@@ -61,6 +61,8 @@ const InitiateDepositBody = z.discriminatedUnion('provider', [
   // Etherfuse — LATAM anchor (Pix/SPEI)
   z.object({
     provider: z.literal('etherfuse'),
+    /** Carteira não-custodial de destino do crédito (recebe o USDC). */
+    walletId: z.string().uuid(),
     /** Source asset que o admin paga via fiat ("BRL", "MXN", "USD"). */
     sourceAsset: z
       .string()
@@ -144,6 +146,19 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         );
       }
 
+      // Resolve a carteira de destino (ACTIVE, da company do caller).
+      const wallet = await app.prisma.wallet.findFirst({
+        where: { id: body.walletId, companyId: caller.companyId },
+      });
+      if (!wallet) {
+        throw new ValidationError(`Wallet ${body.walletId} not found in this Company.`);
+      }
+      if (wallet.status !== 'ACTIVE') {
+        throw new ConflictError(
+          `Wallet ${wallet.id} está ${wallet.status}; só carteiras ACTIVE podem receber depósito.`,
+        );
+      }
+
       const result = await initiateEtherfuseDeposit(app.prisma, {
         app,
         companyId: caller.companyId,
@@ -152,7 +167,8 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         targetAssetIdentifier: body.targetAssetIdentifier,
         sourceAsset: body.sourceAsset,
         sourceAmountCents: body.sourceAmountCents,
-        treasuryPublicKey: app.stellar.treasuryPublicKey,
+        walletId: wallet.id,
+        destinationPublicKey: wallet.address,
         customerId: app.etherfuseCustomerId,
         bankAccountId: app.etherfuseBankAccountId,
         client: app.etherfuse,

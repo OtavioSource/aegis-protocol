@@ -407,6 +407,8 @@ model FiatDeposit {
   id                  String                @id @default(uuid()) @db.Uuid
   companyId           String                @db.Uuid
   userId              String                @db.Uuid
+  /// Carteira não-custodial de destino do crédito (Etherfuse). NULL = legado/treasury (SEP-24).
+  walletId            String?               @db.Uuid
   /// Provider do anchor: "stellar-test-anchor" (SEP-24) | "etherfuse-sandbox" | "etherfuse"
   anchorId            String                @db.VarChar(64)
   anchorTransactionId String                @db.VarChar(128)

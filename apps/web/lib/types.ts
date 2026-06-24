@@ -86,6 +86,7 @@ export type Vendor = {
 export type FiatDeposit = {
   id: string;
   status: string;
+  walletId: string | null;
   asset: string;
   amountCents: number | null;
   actualAmountCents: number | null;

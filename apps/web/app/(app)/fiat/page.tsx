@@ -23,7 +23,7 @@ import {
   simulateDeposit,
 } from '@/lib/actions';
 import { api } from '@/lib/api';
-import type { FiatDeposit, FiatWithdrawal, Listed } from '@/lib/types';
+import type { FiatDeposit, FiatWithdrawal, Listed, Wallet } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,41 +33,56 @@ const USDC_IDENTIFIER = 'USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3Z
 const TERMINAL = ['COMPLETED', 'FAILED', 'REFUNDED'];
 
 export default async function FiatPage() {
-  const [deposits, withdrawals] = await Promise.all([
+  const [deposits, withdrawals, wallets] = await Promise.all([
     api.get<Listed<FiatDeposit>>('/v1/fiat/deposits?limit=100'),
     api.get<Listed<FiatWithdrawal>>('/v1/fiat/withdrawals?limit=100'),
+    api.get<Listed<Wallet>>('/v1/wallets'),
   ]);
+  const activeWallets = wallets.data.filter((w) => w.status === 'ACTIVE');
+  const walletLabel = new Map(wallets.data.map((w) => [w.id, w.label]));
 
   return (
     <>
       <PageHeader
         title="Fiat ramp"
-        description="Move money between fiat currencies (BRL, MXN) and the USDC treasury via the Etherfuse anchor. Deposit fiat to fund the treasury; withdraw USDC to send fiat back to a bank account."
+        description="Deposite fiat (Pix/SPEI via Etherfuse) e o USDC entra direto na carteira que você escolher."
       />
 
       {/* ----- On-ramp ----- */}
       <div className="mb-4">
-        <SectionCard title="New deposit (on-ramp Etherfuse)">
-          <ActionForm action={initiateDeposit} submitLabel="Start deposit">
-            <input type="hidden" name="provider" value="etherfuse" />
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="Fiat currency">
-                <Select name="sourceAsset" defaultValue="BRL">
-                  <option value="BRL">BRL (Pix)</option>
-                  <option value="MXN">MXN (SPEI)</option>
+        <SectionCard title="Novo depósito (on-ramp Pix/SPEI)">
+          {activeWallets.length === 0 ? (
+            <p className="text-xs text-amber-300">
+              Você precisa de uma carteira <strong>ACTIVE</strong> para receber o depósito. Crie/ative
+              em <a className="text-accent" href="/wallets">Wallets</a>.
+            </p>
+          ) : (
+            <ActionForm action={initiateDeposit} submitLabel="Iniciar depósito">
+              <input type="hidden" name="provider" value="etherfuse" />
+              <input type="hidden" name="asset" value="USDC" />
+              <input type="hidden" name="targetAssetIdentifier" value={USDC_IDENTIFIER} />
+              <Field label="Carteira de destino" hint="O USDC entra nesta carteira">
+                <Select name="walletId" required>
+                  {activeWallets.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.label} ({w.address.slice(0, 6)}…{w.address.slice(-4)})
+                    </option>
+                  ))}
                 </Select>
               </Field>
-              <Field label="Fiat amount (cents)" hint="2500 = R$ 25.00">
-                <Input name="sourceAmountCents" type="number" min="1" required placeholder="2500" />
-              </Field>
-              <Field label="Target asset">
-                <Input name="asset" defaultValue="USDC" />
-              </Field>
-            </div>
-            <Field label="Target asset identifier">
-              <Input name="targetAssetIdentifier" defaultValue={USDC_IDENTIFIER} />
-            </Field>
-          </ActionForm>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Moeda">
+                  <Select name="sourceAsset" defaultValue="BRL">
+                    <option value="BRL">BRL (Pix)</option>
+                    <option value="MXN">MXN (SPEI)</option>
+                  </Select>
+                </Field>
+                <Field label="Valor" hint="ex.: 80 ou 80,50">
+                  <Input name="amount" type="text" inputMode="decimal" required placeholder="80,00" />
+                </Field>
+              </div>
+            </ActionForm>
+          )}
         </SectionCard>
       </div>
 
@@ -78,6 +93,7 @@ export default async function FiatPage() {
           <THead>
             <Tr>
               <Th>Date</Th>
+              <Th>Carteira</Th>
               <Th>Anchor</Th>
               <Th>Asset</Th>
               <Th>Amount</Th>
@@ -92,6 +108,7 @@ export default async function FiatPage() {
               return (
                 <Tr key={d.id}>
                   <Td>{fmtDate(d.createdAt)}</Td>
+                  <Td>{d.walletId ? (walletLabel.get(d.walletId) ?? '—') : 'treasury'}</Td>
                   <Td>{d.anchorId}</Td>
                   <Td>{d.asset}</Td>
                   <Td>{fmtCents(d.actualAmountCents ?? d.amountCents)}</Td>
