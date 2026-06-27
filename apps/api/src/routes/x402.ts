@@ -4,9 +4,19 @@
  * POST /v1/x402/verify  — verify a Stellar payment payload against payment requirements
  * POST /v1/x402/settle  — settle a Stellar payment (sign + submit on-chain)
  *
- * These endpoints delegate to @x402/stellar ExactStellarScheme (facilitator).
- * They are PUBLIC — no agent auth required. Vendors call them server-side.
- * Rate-limited via the global rate-limit plugin registered in server.ts.
+ * Modelo NÃO-CUSTODIAL (ADR 0007): o pagamento governado pelo Aegis é liquidado
+ * pelo fluxo de duas fases `POST /v1/spend-requests` → `/cosign` (agente assina,
+ * Aegis co-assina com a aegis key da company). Esse fluxo produz um `txHash`.
+ * O agente apresenta esse txHash ao vendor no header X-PAYMENT, e o vendor chama
+ * `/verify` aqui — que confere a tx direto no Horizon (caminho "pay-first").
+ * A verificação é agnóstica a quem assinou (1 ou 2 chaves), então não muda.
+ *
+ * O caminho canônico do facilitator (@x402/stellar com a chave operacional do
+ * Aegis como signer) permanece para interop x402 genérico — NÃO move fundos de
+ * usuário (esses vivem nas carteiras multisig dos donos), apenas a conta
+ * operacional do Aegis. Não é o caminho de pagamento governado.
+ *
+ * PUBLIC — sem auth de agente. Vendors chamam server-side. Rate-limited global.
  */
 
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
@@ -56,11 +66,12 @@ const BodySchema = z.object({
 // ---------------------------------------------------------------------------
 // Aegis "pay-first" verification helper
 // ---------------------------------------------------------------------------
-// O Aegis liquida o pagamento on-chain ANTES de devolver a prova ao agente
-// (modelo "pay-first, prove later"). O X-PAYMENT contém apenas o txHash de
-// uma tx já submetida — o `@x402/stellar` facilitator canônico não consegue
-// validar isso porque espera uma tx ainda não submetida. Aqui, verificamos
-// direto no Horizon que o pagamento on-chain bate com os requirements.
+// O pagamento governado já foi liquidado on-chain pelo fluxo não-custodial de
+// duas fases (spend-request → cosign), que devolveu um txHash ao agente. O
+// X-PAYMENT carrega apenas esse txHash de uma tx já submetida — o `@x402/stellar`
+// facilitator canônico não valida isso (espera uma tx ainda não submetida).
+// Aqui, verificamos direto no Horizon que o pagamento on-chain bate com os
+// requirements (agnóstico a multisig — confere destino/asset/valor).
 
 async function verifyOnChainPayment(
   horizonUrl: string,

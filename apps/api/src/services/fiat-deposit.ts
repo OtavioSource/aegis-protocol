@@ -174,6 +174,7 @@ export function serializeFiatDeposit(d: FiatDeposit, options?: { network?: strin
   return {
     id: d.id,
     status: d.status,
+    walletId: d.walletId,
     asset: d.asset,
     amountCents: d.amountCents !== null ? Number(d.amountCents) : null,
     actualAmountCents: d.actualAmountCents !== null ? Number(d.actualAmountCents) : null,

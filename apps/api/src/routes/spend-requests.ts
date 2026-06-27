@@ -1,12 +1,14 @@
 /**
- * Rotas de SpendRequest.
+ * Rotas de SpendRequest (modelo não-custodial 5a — ADR 0007).
  *
  * - POST /v1/spend-requests   (RF1) — Idempotency-Key obrigatório.
- *   Fluxo síncrono completo:
  *     1. Auth + idempotency
  *     2. Engine avalia política → persiste decisão + audit event
- *     3. Se APPROVED → executa Payment USDC on-chain (síncrono ~3-5s testnet)
- *     4. Resposta inclui txHash quando executado com sucesso
+ *     3. Se APPROVED → constrói o envelope canônico (XDR não-assinado),
+ *        status AWAITING_AGENT_SIGNATURE; o `envelopeXdr` volta no response.
+ *
+ * - POST /v1/spend-requests/:id/cosign — o agente devolve o envelope assinado;
+ *   o Aegis valida (igualdade + assinatura), co-assina e submete on-chain.
  *
  * - GET  /v1/spend-requests          (lista filtrada da Company)
  * - GET  /v1/spend-requests/:id      (by id)
@@ -24,7 +26,10 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { NotFoundError, PolicyRejectedError, ValidationError } from '../lib/errors.js';
 import { extractIdempotencyKey } from '../lib/idempotency.js';
-import { executeSpendRequestPayment } from '../services/payment-executor.js';
+import {
+  cosignSpendRequest,
+  prepareSpendRequestEnvelope,
+} from '../services/multisig-payment.js';
 import { emitSorobanAuditEvent } from '../services/soroban-audit.js';
 import {
   createSpendRequest,
@@ -139,28 +144,70 @@ const spendRequestsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       });
     }
 
-    // APPROVED — executa Payment USDC on-chain (síncrono).
-    // Reused (idempotency hit) NÃO re-executa: retorna estado atual.
+    // APPROVED — modelo não-custodial (5a): o Aegis NÃO liquida sozinho.
+    // Constrói o envelope canônico, persiste-o e transiciona para
+    // AWAITING_AGENT_SIGNATURE. O agente assina e chama POST /:id/cosign.
+    // Reused (idempotency hit) NÃO re-prepara: retorna o estado atual.
     if (!reused) {
-      await executeSpendRequestPayment(app.prisma, { app, spendRequestId: spendRequest.id });
+      await prepareSpendRequestEnvelope(app, spendRequest.id);
     }
 
-    // Re-lê SpendRequest para retornar com txHash/status atualizados
+    // Re-lê SpendRequest para retornar com envelope/status atualizados
     const final = await app.prisma.spendRequest.findUnique({
       where: { id: spendRequest.id },
     });
-    if (!final) throw new NotFoundError(`SpendRequest ${spendRequest.id} not found after execution`);
+    if (!final) throw new NotFoundError(`SpendRequest ${spendRequest.id} not found after prepare`);
 
     const serialized = serializeSpendRequest(final, {
       withStellarExpertUrl: true,
       network: env.STELLAR_NETWORK,
     });
 
-    // Status code: 201 se criou (mesmo se on-chain falhou — registro persistido)
+    // Status code: 201 se criou (mesmo se prepare falhou — registro persistido)
     //              200 se idempotency reuse
     reply.code(reused ? 200 : 201);
     return serialized;
   });
+
+  // ----- POST /v1/spend-requests/:id/cosign -----
+  // Fase 2 do fluxo não-custodial: o agente devolve o envelope assinado.
+  // O Aegis valida (igualdade ao emitido + assinatura do agente), co-assina
+  // com a aegis key da company e submete on-chain.
+  app.post<{ Params: { id: string }; Body: { signedXdr?: string } }>(
+    '/v1/spend-requests/:id/cosign',
+    async (request, reply) => {
+      const { companyId } = request.requireAuth();
+      const signedXdr = request.body?.signedXdr;
+      if (!signedXdr || typeof signedXdr !== 'string') {
+        throw new ValidationError('signedXdr (string XDR base64) é obrigatório no body.');
+      }
+
+      // Garante que a SpendRequest pertence à company do caller.
+      const sr = await app.prisma.spendRequest.findFirst({
+        where: { id: request.params.id, companyId },
+      });
+      if (!sr) throw new NotFoundError(`SpendRequest ${request.params.id} not found`);
+
+      const result = await cosignSpendRequest(app, {
+        spendRequestId: sr.id,
+        signedXdr,
+      });
+
+      if (result.status === 'noop') {
+        // Estado não elegível (já executada / não aguardando assinatura).
+        reply.code(409);
+        return { error: 'invalid_state', detail: result.reason };
+      }
+
+      const final = await app.prisma.spendRequest.findUnique({ where: { id: sr.id } });
+      if (!final) throw new NotFoundError(`SpendRequest ${sr.id} not found after cosign`);
+      reply.code(result.status === 'executed' ? 200 : 422);
+      return serializeSpendRequest(final, {
+        withStellarExpertUrl: true,
+        network: env.STELLAR_NETWORK,
+      });
+    },
+  );
 
   // ----- GET /v1/spend-requests -----
   app.get('/v1/spend-requests', async (request) => {

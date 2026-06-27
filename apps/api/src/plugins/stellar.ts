@@ -37,6 +37,7 @@ const stellarPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     horizonUrl: env.STELLAR_HORIZON_URL,
     treasurySecret: env.TREASURY_SECRET,
     anchorDomain: env.SEP24_ANCHOR_HOME_DOMAIN,
+    aegisSignerRootSecret: env.AEGIS_SIGNER_ROOT_SECRET,
   });
 
   app.decorate('stellar', adapter);

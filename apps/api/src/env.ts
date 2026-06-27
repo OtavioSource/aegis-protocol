@@ -29,6 +29,16 @@ const EnvSchema = z.object({
   SOROBAN_RPC_URL: z.string().url().default('https://soroban-testnet.stellar.org'),
   TREASURY_PUBLIC_KEY: z.string().optional(),
   TREASURY_SECRET: z.string().optional(),
+  /**
+   * Seed-raiz para derivar a aegis key (co-signer) de cada company via HKDF
+   * (modelo não-custodial — ADR 0007 §8). Uma chave por company é derivada
+   * on-demand; só a pubkey é persistida. NUNCA commitar; rotacionar = re-derivar.
+   * Gerar com: node -e "console.log(crypto.randomBytes(32).toString('hex'))"
+   */
+  AEGIS_SIGNER_ROOT_SECRET: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/i, 'AEGIS_SIGNER_ROOT_SECRET must be 64 hex chars (32 bytes)')
+    .optional(),
 
   // Vendor key encryption (Modo AEGIS — cifra secret keys de vendor antes de persistir)
   // Gerar com: node -e "console.log(crypto.randomBytes(32).toString('hex'))"

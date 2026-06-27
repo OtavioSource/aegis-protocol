@@ -43,9 +43,26 @@ export type Agent = {
   description: string | null;
   apiKeyPrefix: string;
   activePolicyId: string;
+  walletId: string | null;
+  signerPubKey: string | null;
   status: string;
   createdAt: string;
   revokedAt: string | null;
+};
+
+/** Carteira não-custodial multisig (ADR 0007). */
+export type Wallet = {
+  id: string;
+  label: string;
+  network: string;
+  address: string;
+  ownerKeyMode: 'GENERATED' | 'EXTERNAL';
+  aegisSignerPubKey: string;
+  status: 'PROVISIONING' | 'ACTIVE';
+  setupTxHash: string | null;
+  createdAt: string;
+  /** Saldo on-chain (null se a conta ainda não existe). */
+  balances?: { usdc: string; xlm: string } | null;
 };
 
 export type VendorWallet = {
@@ -69,6 +86,7 @@ export type Vendor = {
 export type FiatDeposit = {
   id: string;
   status: string;
+  walletId: string | null;
   asset: string;
   amountCents: number | null;
   actualAmountCents: number | null;

@@ -35,6 +35,7 @@ export {
   payX402,
   X402Error,
 } from './http-402.js';
+export { signEnvelope } from './signer.js';
 export type { PaymentPayload, PaymentRequired, PaymentRequirements } from './http-402.js';
 export type {
   AegisClientOptions,

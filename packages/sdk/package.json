@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@aegis/shared": "workspace:*",
+    "@stellar/stellar-base": "^14.1.0",
     "@x402/core": "^2.13.0",
     "zod": "^3.24.0"
   },

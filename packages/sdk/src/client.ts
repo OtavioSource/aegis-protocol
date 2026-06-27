@@ -29,6 +29,7 @@
  */
 
 import { errorFromResponse, NetworkError } from './errors.js';
+import { signEnvelope } from './signer.js';
 import type {
   AegisClientOptions,
   ListResult,
@@ -44,6 +45,7 @@ const DEFAULT_API_VERSION = 'v1';
 
 export class AegisClient {
   private readonly apiKey: string;
+  private readonly agentSignerSecret?: string;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetch: typeof fetch;
@@ -54,6 +56,7 @@ export class AegisClient {
       throw new Error('AegisClient: apiKey is required and must start with "cr_"');
     }
     this.apiKey = options.apiKey;
+    this.agentSignerSecret = options.agentSignerSecret;
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
@@ -63,11 +66,16 @@ export class AegisClient {
   // ===== Spend Requests =====
 
   /**
-   * Solicita um pagamento. Engine avalia política e (se APPROVED) executa
-   * Payment USDC on-chain antes de retornar.
+   * Solicita um pagamento (modelo não-custodial 5a — ADR 0007).
+   *
+   * Two-phase automático: cria a spend-request; se a policy aprovar, o Aegis
+   * devolve `AWAITING_AGENT_SIGNATURE` + `envelopeXdr`. Com `agentSignerSecret`
+   * configurado, o SDK assina o envelope e chama `/cosign` por baixo, retornando
+   * o resultado final (EXECUTED / EXECUTION_FAILED). Sem a secret, retorna
+   * `AWAITING_AGENT_SIGNATURE` (assine com `cosign()` manualmente).
    *
    * Status code mapping:
-   * - 200/201 → APPROVED (txHash preenchido se EXECUTED)
+   * - 200/201 → APPROVED → envelope emitido (e co-assinado se houver secret)
    * - 202     → REQUIRES_APPROVAL (aguardando humano)
    * - 422     → REJECTED → lança `PolicyRejectedError`
    * - 409     → conflito idempotency → lança `IdempotencyConflictError`
@@ -75,10 +83,58 @@ export class AegisClient {
    */
   async pay(input: PayInput, options: PayOptions = {}): Promise<PayResult> {
     const idempotencyKey = options.idempotencyKey ?? this.generateIdempotencyKey();
-    return await this.request<PayResult>('POST', '/spend-requests', {
+    const result = await this.request<PayResult>('POST', '/spend-requests', {
       headers: { 'Idempotency-Key': idempotencyKey },
       body: input,
     });
+
+    // Two-phase: se aprovado e há secret + envelope, co-assina automaticamente.
+    if (
+      result.status === 'AWAITING_AGENT_SIGNATURE' &&
+      result.envelopeXdr &&
+      this.agentSignerSecret
+    ) {
+      return await this.cosign(result.id, {
+        envelopeXdr: result.envelopeXdr,
+        networkPassphrase: result.networkPassphrase ?? undefined,
+      });
+    }
+    return result;
+  }
+
+  /**
+   * Fase 2 do fluxo não-custodial: assina o envelope com a agent key e submete
+   * ao `/cosign`. Normalmente chamado automaticamente por `pay()`; exposto para
+   * quem quer assinar manualmente (ex.: sem `agentSignerSecret` no client).
+   *
+   * Se `envelope.envelopeXdr` não for fornecido, busca a spend-request por id.
+   */
+  async cosign(
+    spendRequestId: string,
+    envelope?: { envelopeXdr?: string; networkPassphrase?: string; signedXdr?: string },
+  ): Promise<PayResult> {
+    let signedXdr = envelope?.signedXdr;
+    if (!signedXdr) {
+      let xdr = envelope?.envelopeXdr;
+      let passphrase = envelope?.networkPassphrase;
+      if (!xdr || !passphrase) {
+        const sr = await this.getSpendRequest(spendRequestId);
+        xdr = xdr ?? sr.envelopeXdr ?? undefined;
+        passphrase = passphrase ?? sr.networkPassphrase ?? undefined;
+      }
+      if (!xdr || !passphrase) {
+        throw new Error('cosign: envelopeXdr/networkPassphrase indisponíveis para esta spend-request.');
+      }
+      if (!this.agentSignerSecret) {
+        throw new Error('cosign: agentSignerSecret não configurado e signedXdr não fornecido.');
+      }
+      signedXdr = signEnvelope(xdr, passphrase, this.agentSignerSecret);
+    }
+    return await this.request<PayResult>(
+      'POST',
+      `/spend-requests/${encodeURIComponent(spendRequestId)}/cosign`,
+      { body: { signedXdr } },
+    );
   }
 
   /** GET /v1/spend-requests/:id */

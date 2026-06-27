@@ -53,9 +53,31 @@ export enum SpendRequestStatus {
   APPROVED_BY_HUMAN = 'APPROVED_BY_HUMAN',
   REJECTED_BY_HUMAN = 'REJECTED_BY_HUMAN',
   EXPIRED = 'EXPIRED',
+  /**
+   * Não-custodial (multisig 5a): a policy aprovou e o Aegis emitiu o envelope
+   * canônico (XDR não-assinado); aguardando a assinatura da agent key via
+   * `POST /spend-requests/:id/cosign`. Ver ADR 0007 §5.
+   */
+  AWAITING_AGENT_SIGNATURE = 'AWAITING_AGENT_SIGNATURE',
   EXECUTING = 'EXECUTING',
   EXECUTED = 'EXECUTED',
   EXECUTION_FAILED = 'EXECUTION_FAILED',
+}
+
+/** Estado de provisionamento de uma carteira (conta multisig). Ver ADR 0007 §4. */
+export enum WalletStatus {
+  /** Conta criada no nosso modelo, multisig ainda não configurado on-chain. */
+  PROVISIONING = 'PROVISIONING',
+  /** Signers + thresholds aplicados on-chain; pronta para receber/gastar. */
+  ACTIVE = 'ACTIVE',
+}
+
+/** Origem da master key (do dono) de uma carteira. Ver ADR 0007 §7. */
+export enum OwnerKeyMode {
+  /** Aegis gerou o keypair client-side (secret nunca chegou ao servidor). */
+  GENERATED = 'GENERATED',
+  /** Dono trouxe a própria wallet (Freighter/LOBSTR) — só a pubkey é informada. */
+  EXTERNAL = 'EXTERNAL',
 }
 
 /**

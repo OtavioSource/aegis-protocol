@@ -28,10 +28,16 @@ import type {
 import { ChainType } from '@aegis/shared';
 import { type Horizon, Keypair, TransactionBuilder } from '@stellar/stellar-sdk';
 
+import { deriveAegisSigner } from './aegis-signer.js';
 import { findAnchorAssetIssuer, resolveAnchorToml } from './anchor-toml.js';
-import { resolveAsset } from './assets.js';
+import { centsToAssetString, resolveAsset } from './assets.js';
 import { createHorizonServer } from './horizon.js';
 import { loadTreasuryKey } from './keypair.js';
+import {
+  buildPaymentEnvelope,
+  buildWalletSetupTransaction,
+  cosignMatchingEnvelope,
+} from './multisig.js';
 import type { NetworkConfig, NetworkKind } from './network.js';
 import { resolveNetwork } from './network.js';
 import { executePayment, extractHorizonError } from './payment.js';
@@ -48,10 +54,19 @@ import { sponsorVendor } from './sponsoring.js';
 export interface StellarSettlementAdapterOptions {
   network: NetworkKind;
   horizonUrl?: string;
-  /** Secret key Stellar da treasury (S...). Sempre vem de env var. */
+  /**
+   * Secret key Stellar da conta operacional do Aegis (S...). Sempre vem de env var.
+   * Usada como admin do Soroban audit, source/sponsor de setup de carteira e
+   * facilitator x402 — NÃO custodia fundos de usuário (modelo não-custodial).
+   */
   treasurySecret: string;
   /** Domain do anchor SEP-1 (ex: "testanchor.stellar.org"). */
   anchorDomain: string;
+  /**
+   * Seed-raiz (64 hex) para derivar a aegis key (co-signer) por company.
+   * Opcional no boot; obrigatória para co-assinar pagamentos (ADR 0007 §8).
+   */
+  aegisSignerRootSecret?: string;
 }
 
 export class StellarSettlementAdapter implements SettlementAdapter {
@@ -61,6 +76,7 @@ export class StellarSettlementAdapter implements SettlementAdapter {
   private readonly horizon: Horizon.Server;
   private readonly treasuryKeypair: Keypair;
   private readonly anchorDomain: string;
+  private readonly aegisSignerRootSecret?: string;
 
   constructor(options: StellarSettlementAdapterOptions) {
     this.networkConfig = resolveNetwork(options.network, {
@@ -69,10 +85,177 @@ export class StellarSettlementAdapter implements SettlementAdapter {
     this.horizon = createHorizonServer(this.networkConfig);
     this.treasuryKeypair = loadTreasuryKey(options.treasurySecret).keypair;
     this.anchorDomain = options.anchorDomain;
+    this.aegisSignerRootSecret = options.aegisSignerRootSecret;
   }
 
   get treasuryPublicKey(): string {
     return this.treasuryKeypair.publicKey();
+  }
+
+  /** Network ativa (testnet/mainnet) — para callers que precisam montar URLs/links. */
+  get network(): NetworkKind {
+    return this.networkConfig.kind;
+  }
+
+  // ============ Não-custodial multisig (ADR 0007) ============
+
+  /** Deriva a keypair do co-signer do Aegis para uma company (HKDF). */
+  deriveAegisSignerForCompany(companyId: string): Keypair {
+    if (!this.aegisSignerRootSecret) {
+      throw new Error(
+        'AEGIS_SIGNER_ROOT_SECRET não configurado — necessário para derivar a aegis key e co-assinar.',
+      );
+    }
+    return deriveAegisSigner(this.aegisSignerRootSecret, companyId);
+  }
+
+  /** Pubkey do co-signer do Aegis para uma company (para persistir na Wallet). */
+  aegisSignerPubKeyForCompany(companyId: string): string {
+    return this.deriveAegisSignerForCompany(companyId).publicKey();
+  }
+
+  /**
+   * Saldos USDC + XLM de uma conta qualquer (carteira do dono). Retorna `null`
+   * se a conta ainda não existe on-chain (ex.: carteira GENERATED PROVISIONING).
+   */
+  async getAccountBalances(address: string): Promise<{ usdc: string; xlm: string } | null> {
+    let account;
+    try {
+      account = await this.horizon.loadAccount(address);
+    } catch {
+      return null;
+    }
+    const native = account.balances.find((b) => b.asset_type === 'native');
+    const usdc = account.balances.find(
+      (b) =>
+        b.asset_type !== 'native' &&
+        'asset_code' in b &&
+        (b as { asset_code: string }).asset_code === 'USDC',
+    );
+    return { xlm: native?.balance ?? '0', usdc: usdc?.balance ?? '0' };
+  }
+
+  /** True se a conta já existe on-chain (decide createOwnerAccount no setup). */
+  async accountExists(address: string): Promise<boolean> {
+    try {
+      await this.horizon.loadAccount(address);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Monta a tx de setup multisig de uma carteira (signers + thresholds +
+   * sponsoring CAP-33), já assinada pelo sponsor (conta operacional do Aegis).
+   * Retorna o XDR para o **dono** assinar client-side antes de submeter.
+   */
+  async buildWalletSetup(params: {
+    ownerAddress: string;
+    createOwnerAccount: boolean;
+    companyId: string;
+    agentSignerPubKeys: string[];
+    openUsdcTrustline: boolean;
+  }): Promise<{ setupXdr: string; xlmSponsored: string; aegisSignerPubKey: string }> {
+    const aegisKp = this.deriveAegisSignerForCompany(params.companyId);
+    const usdcAsset = params.openUsdcTrustline
+      ? await resolveAsset('USDC', this.networkConfig.kind, this.anchorDomain)
+      : undefined;
+    const { transaction, xlmSponsored } = await buildWalletSetupTransaction({
+      horizon: this.horizon,
+      network: this.networkConfig,
+      sponsorKeypair: this.treasuryKeypair,
+      ownerAddress: params.ownerAddress,
+      createOwnerAccount: params.createOwnerAccount,
+      aegisSignerPubKey: aegisKp.publicKey(),
+      agentSignerPubKeys: params.agentSignerPubKeys,
+      usdcAsset,
+    });
+    return {
+      setupXdr: transaction.toXDR(),
+      xlmSponsored,
+      aegisSignerPubKey: aegisKp.publicKey(),
+    };
+  }
+
+  /**
+   * Submete uma tx já totalmente assinada (sem adicionar assinatura). Usado para
+   * o setup de carteira (já vem sponsor-assinado + dono-assinado).
+   */
+  async submitSignedXdr(xdr: string): Promise<{ txHash: string; ledger: number }> {
+    let tx: ReturnType<typeof TransactionBuilder.fromXDR>;
+    try {
+      tx = TransactionBuilder.fromXDR(xdr, this.networkConfig.passphrase);
+    } catch (err) {
+      throw new Error(`Invalid transaction XDR: ${(err as Error).message}`);
+    }
+    try {
+      const result = await this.horizon.submitTransaction(tx);
+      return { txHash: result.hash, ledger: result.ledger };
+    } catch (err) {
+      throw new Error(extractHorizonError(err));
+    }
+  }
+
+  /**
+   * Constrói o envelope canônico de pagamento (XDR não-assinado) a partir da
+   * carteira do dono. Source = `walletAddress`; o Aegis NÃO assina aqui.
+   */
+  async buildPaymentEnvelope(params: {
+    walletAddress: string;
+    destinationPublicKey: string;
+    amountCents: number | bigint;
+    /** Asset code do pagamento (USDC no MVP; outros via path payment é follow-up). */
+    assetCode: string;
+    memoHash: Uint8Array;
+    timeoutSecs?: number;
+  }): Promise<string> {
+    const asset = await resolveAsset(params.assetCode, this.networkConfig.kind, this.anchorDomain);
+    return buildPaymentEnvelope({
+      horizon: this.horizon,
+      network: this.networkConfig,
+      walletAddress: params.walletAddress,
+      destination: params.destinationPublicKey,
+      asset,
+      amount: centsToAssetString(params.amountCents),
+      memoHash: params.memoHash,
+      timeoutSecs: params.timeoutSecs,
+    });
+  }
+
+  /**
+   * Co-assina (com a aegis key da company) o envelope que o agente devolveu,
+   * exigindo igualdade ao envelope emitido (hash), e submete on-chain.
+   */
+  async cosignSpendRequestEnvelope(params: {
+    companyId: string;
+    expectedEnvelopeXdr: string;
+    signedXdr: string;
+    expectedAgentSignerPubKey: string;
+    /** Pubkey do co-signer do Aegis configurado on-chain (Wallet.aegisSignerPubKey). */
+    expectedAegisSignerPubKey?: string;
+  }): Promise<{ txHash: string; ledger: number }> {
+    const aegisKeypair = this.deriveAegisSignerForCompany(params.companyId);
+    if (
+      params.expectedAegisSignerPubKey &&
+      aegisKeypair.publicKey() !== params.expectedAegisSignerPubKey
+    ) {
+      throw new Error(
+        `Aegis signer divergente: derivado ${aegisKeypair.publicKey()} ≠ configurado on-chain ` +
+          `${params.expectedAegisSignerPubKey}. A seed-raiz (AEGIS_SIGNER_ROOT_SECRET) pode ter ` +
+          `sido rotacionada — a carteira precisa de novo setup para registrar a nova aegis key.`,
+      );
+    }
+    return cosignMatchingEnvelope({
+      horizon: this.horizon,
+      networkPassphrase: this.networkConfig.passphrase,
+      aegisKeypair,
+      expectedEnvelopeXdr: params.expectedEnvelopeXdr,
+      signedXdr: params.signedXdr,
+      expectedAgentSignerPubKey: params.expectedAgentSignerPubKey,
+      // Aegis paga a fee (fee-bump) → carteira do dono não precisa de XLM.
+      feeSourceKeypair: this.treasuryKeypair,
+    });
   }
 
   async sponsorVendor(
