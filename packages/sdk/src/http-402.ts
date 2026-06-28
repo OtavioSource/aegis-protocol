@@ -79,7 +79,13 @@ export async function payX402(
   client: AegisClient,
   response: Response,
   opts: {
-    vendorId: string;
+    /**
+     * Vendor Aegis a pagar. Opcional: se omitido, é lido do campo
+     * `extra.aegisVendorId` do próprio 402 (o gateway anuncia o vendorId na
+     * fatura), então o agente não precisa configurá-lo. `opts.vendorId` tem
+     * precedência se fornecido.
+     */
+    vendorId?: string;
     actionType: string;
     reason?: string;
     idempotencyKey?: string;
@@ -88,6 +94,15 @@ export async function payX402(
   const requirements = parsePaymentRequired(response);
   const req = requirements.find((r) => r.scheme === 'exact') ?? requirements[0];
   if (!req) throw new X402Error('invalid_payment_required_format');
+
+  // Resolve o vendorId: explícito tem precedência; senão lê do `extra` do 402.
+  const vendorId =
+    opts.vendorId ?? (req.extra as Record<string, unknown> | undefined)?.aegisVendorId;
+  if (typeof vendorId !== 'string' || !vendorId) {
+    throw new X402Error('invalid_payment_required_format', {
+      reason: 'vendorId ausente — passe opts.vendorId ou inclua extra.aegisVendorId no 402',
+    });
+  }
 
   // Convert x402 amount string (e.g. "0.005") to cents for Aegis API
   const amountFloat = parseFloat(req.amount);
@@ -101,7 +116,7 @@ export async function payX402(
 
   const result = await client.pay(
     {
-      vendorId: opts.vendorId,
+      vendorId,
       actionType: opts.actionType,
       reason: opts.reason,
       amountCents,

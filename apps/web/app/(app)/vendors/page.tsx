@@ -1,4 +1,5 @@
 import { ActionForm } from '@/components/action-form';
+import { CopyButton } from '@/components/copy-button';
 import { InfoTooltip } from '@/components/info-tooltip';
 import {
   Badge,
@@ -65,9 +66,10 @@ export default async function VendorsPage() {
           <THead>
             <Tr>
               <Th>Name</Th>
+              <Th>Vendor ID</Th>
               <Th>Asset</Th>
               <Th>Status</Th>
-              <Th>Wallet</Th>
+              <Th>Wallet (payTo)</Th>
               <Th>Action</Th>
             </Tr>
           </THead>
@@ -77,16 +79,23 @@ export default async function VendorsPage() {
               return (
                 <Tr key={v.id}>
                   <Td>{v.name}</Td>
+                  <Td>
+                    <span className="flex items-center gap-1.5">
+                      <code className="text-xs text-slate-400">{v.id.slice(0, 8)}…</code>
+                      <CopyButton value={v.id} title="Copiar AEGIS_VENDOR_ID" />
+                    </span>
+                  </Td>
                   <Td>{v.preferredAsset}</Td>
                   <Td>
                     <StatusBadge status={v.status} />
                   </Td>
                   <Td>
                     {wallet ? (
-                      <span className="flex items-center gap-2">
+                      <span className="flex items-center gap-1.5">
                         <code className="text-xs text-slate-400">
-                          {wallet.publicKey.slice(0, 10)}…
+                          {wallet.publicKey.slice(0, 6)}…{wallet.publicKey.slice(-4)}
                         </code>
+                        <CopyButton value={wallet.publicKey} title="Copiar VENDOR_WALLET_PUBLIC_KEY" />
                         <Badge tone="green">{wallet.status}</Badge>
                       </span>
                     ) : (
