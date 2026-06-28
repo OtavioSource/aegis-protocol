@@ -131,6 +131,13 @@ export async function createPolicy(_: ActionState, fd: FormData): Promise<Action
       .split(/[,;\s]+/)
       .map((s) => s.trim().replace(/^\.+|\.+$/g, ''))
       .filter(Boolean);
+    // Whitelist/blacklist de vendors: checkboxes (multi) no form. Um vendor não
+    // pode estar nas duas — deny vence, então removemos da allow se colidir.
+    const denyVendor = fd.getAll('denyVendor').map(String).filter(Boolean);
+    const allowVendor = fd
+      .getAll('allowVendor')
+      .map(String)
+      .filter((id) => id && !denyVendor.includes(id));
     await api.post('/v1/policies', {
       name,
       rules: {
@@ -140,8 +147,8 @@ export async function createPolicy(_: ActionState, fd: FormData): Promise<Action
         // Limites de velocidade (escala p/ humano ao exceder). Vazio = sem limite.
         maxSpendPerHourCents: dollarsToCents(fd, 'maxSpendPerHour'),
         maxPaymentsPerHour: intOrNull(fd, 'maxPaymentsPerHour'),
-        vendorAllowList: [],
-        vendorDenyList: [],
+        vendorAllowList: allowVendor,
+        vendorDenyList: denyVendor,
         actionTypes,
       },
     });
@@ -182,6 +189,9 @@ export async function createVendor(_: ActionState, fd: FormData): Promise<Action
     await api.post('/v1/vendors', {
       name,
       description: str(fd, 'description') || undefined,
+      website: str(fd, 'website') || undefined,
+      category: str(fd, 'category') || undefined,
+      contactEmail: str(fd, 'contactEmail') || undefined,
       preferredAsset: str(fd, 'preferredAsset') || 'USDC',
       sponsorWallet: str(fd, 'sponsorWallet') === 'on',
     });

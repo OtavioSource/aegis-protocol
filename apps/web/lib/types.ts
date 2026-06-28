@@ -32,6 +32,8 @@ export type Policy = {
     maxSpendPerHourCents: number | null;
     maxPaymentsPerHour: number | null;
     actionTypes: string[];
+    vendorAllowList: string[];
+    vendorDenyList: string[];
   };
   isActive: boolean;
   createdAt: string;
@@ -77,6 +79,9 @@ export type Vendor = {
   id: string;
   name: string;
   description: string | null;
+  website: string | null;
+  category: string | null;
+  contactEmail: string | null;
   preferredAsset: string;
   status: string;
   createdAt: string;

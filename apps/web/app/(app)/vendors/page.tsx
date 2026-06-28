@@ -47,9 +47,22 @@ export default async function VendorsPage() {
                 </Select>
               </Field>
             </div>
-            <Field label="Description (optional)">
-              <Input name="description" placeholder="LLM API provider" />
-            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Website / domain (optional)">
+                <Input name="website" placeholder="anthropic.com" />
+              </Field>
+              <Field label="Category (optional)">
+                <Input name="category" placeholder="llm-api" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Contact email (optional)">
+                <Input name="contactEmail" type="email" placeholder="billing@anthropic.com" />
+              </Field>
+              <Field label="Description (optional)">
+                <Input name="description" placeholder="LLM API provider" />
+              </Field>
+            </div>
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input type="checkbox" name="sponsorWallet" className="accent-accent" />
               Sponsor wallet on-chain now
@@ -78,7 +91,16 @@ export default async function VendorsPage() {
               const wallet = v.wallets?.[0];
               return (
                 <Tr key={v.id}>
-                  <Td>{v.name}</Td>
+                  <Td>
+                    <div className="flex flex-col">
+                      <span>{v.name}</span>
+                      {(v.category || v.website) && (
+                        <span className="text-xs text-slate-500">
+                          {[v.category, v.website].filter(Boolean).join(' · ')}
+                        </span>
+                      )}
+                    </div>
+                  </Td>
                   <Td>
                     <span className="flex items-center gap-1.5">
                       <code className="text-xs text-slate-400">{v.id.slice(0, 8)}…</code>

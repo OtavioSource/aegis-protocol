@@ -17,6 +17,9 @@ import { sponsorVendorWallet } from '../services/vendor-sponsoring.js';
 const CreateVendorBody = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2_000).optional(),
+  website: z.string().max(255).optional(),
+  category: z.string().max(64).optional(),
+  contactEmail: z.string().email().max(255).optional(),
   preferredAsset: z.string().min(1).max(12).regex(/^[A-Z0-9]+$/).default('USDC'),
   metadata: z.record(z.unknown()).optional(),
   /**
@@ -30,6 +33,9 @@ const CreateVendorBody = z.object({
 const PatchVendorBody = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(2_000).nullable().optional(),
+  website: z.string().max(255).nullable().optional(),
+  category: z.string().max(64).nullable().optional(),
+  contactEmail: z.string().email().max(255).nullable().optional(),
   preferredAsset: z.string().min(1).max(12).regex(/^[A-Z0-9]+$/).optional(),
   metadata: z.record(z.unknown()).optional(),
   status: z.nativeEnum(VendorStatus).optional(),
@@ -67,6 +73,9 @@ const vendorsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
         companyId: caller.companyId,
         name: body.name,
         description: body.description,
+        website: body.website,
+        category: body.category,
+        contactEmail: body.contactEmail,
         preferredAsset: body.preferredAsset,
         metadata: (body.metadata ?? {}) as object,
       },
@@ -157,6 +166,9 @@ const vendorsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
       data: {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.website !== undefined ? { website: body.website } : {}),
+        ...(body.category !== undefined ? { category: body.category } : {}),
+        ...(body.contactEmail !== undefined ? { contactEmail: body.contactEmail } : {}),
         ...(body.preferredAsset !== undefined ? { preferredAsset: body.preferredAsset } : {}),
         ...(body.metadata !== undefined ? { metadata: body.metadata as object } : {}),
         ...(body.status !== undefined ? { status: body.status } : {}),
