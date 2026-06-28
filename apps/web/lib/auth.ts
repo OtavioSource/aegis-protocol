@@ -11,8 +11,16 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 
 const API_URL = process.env.AEGIS_API_URL ?? 'http://localhost:4000';
 
+// Mantém a sessão do NextAuth alinhada ao TTL do session token da API (8h,
+// ver apps/api/src/lib/session-token.ts). Sem isso, o cookie do NextAuth dura
+// 30 dias (default) e sobrevive ao token da API — o middleware não redireciona
+// e todo link quebra com 401. Com maxAge = 8h, a sessão expira junto e o
+// middleware manda pro /login automaticamente.
+const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
+
 export const authOptions: NextAuthOptions = {
-  session: { strategy: 'jwt' },
+  session: { strategy: 'jwt', maxAge: SESSION_MAX_AGE_SECONDS },
+  jwt: { maxAge: SESSION_MAX_AGE_SECONDS },
   pages: { signIn: '/login' },
   providers: [
     CredentialsProvider({

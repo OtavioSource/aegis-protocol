@@ -38,6 +38,22 @@ function fail(message: string): ActionState {
 }
 
 /**
+ * `redirect()`/`notFound()` do Next sinalizam via throw de um erro com `digest`
+ * `NEXT_REDIRECT`/`NEXT_NOT_FOUND`. Precisa ser re-lançado (não tratado como
+ * falha), senão o redirect de sessão expirada (lib/api) é engolido.
+ */
+function isNextControlFlowError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'digest' in err &&
+    typeof (err as { digest?: unknown }).digest === 'string' &&
+    ((err as { digest: string }).digest.startsWith('NEXT_REDIRECT') ||
+      (err as { digest: string }).digest === 'NEXT_NOT_FOUND')
+  );
+}
+
+/**
  * Executa o action e SEMPRE revalida os paths fornecidos — mesmo quando a API
  * retorna erro. Caso típico: a API criou um SpendRequest com status REJECTED
  * antes de lançar 422 (PolicyRejectedError); precisamos refletir esse registro
@@ -50,6 +66,7 @@ async function run(
   try {
     return await fn();
   } catch (err) {
+    if (isNextControlFlowError(err)) throw err; // deixa o redirect/notFound propagar
     if (err instanceof ApiError) return fail(err.message);
     return fail((err as Error).message || 'Unexpected error');
   } finally {

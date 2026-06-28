@@ -13,6 +13,7 @@
 import 'server-only';
 
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { decode } from 'next-auth/jwt';
 
 const API_URL = process.env.AEGIS_API_URL ?? 'http://localhost:4000';
@@ -45,7 +46,8 @@ async function getBearer(): Promise<string> {
   const token = raw ? await decode({ token: raw, secret }) : null;
   const sessionToken = token?.sessionToken;
   if (!sessionToken) {
-    throw new ApiError('Not authenticated (no session token)', 401);
+    // Sem sessão (cookie ausente/expirado) → volta pro login em vez de erro.
+    redirect('/login');
   }
   return sessionToken;
 }
@@ -69,6 +71,12 @@ async function request<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: 'no-store',
   });
+
+  // Token da API expirado/inválido → sessão morta: redireciona pro login em vez
+  // de propagar erro em toda página/action. (Outros status seguem como ApiError.)
+  if (res.status === 401) {
+    redirect('/login');
+  }
 
   const text = await res.text();
   if (!res.ok) {
