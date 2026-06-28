@@ -225,6 +225,12 @@ model Vendor {
   companyId      String       @db.Uuid
   name           String       @db.VarChar(200)
   description    String?      @db.Text
+  /// Website/domínio do vendor (ex.: "firecrawl.dev"). Identifica o beneficiário.
+  website        String?      @db.VarChar(255)
+  /// Categoria do serviço (ex.: "scraping", "llm-api", "compute").
+  category       String?      @db.VarChar(64)
+  /// Email de contato do vendor (suporte/disputas).
+  contactEmail   String?      @db.VarChar(255)
   /// Asset preferido do vendor: USDC default; aceita EURC, BRL, ARS, etc. (RF11)
   preferredAsset String       @default("USDC") @db.VarChar(12)
   metadata       Json         @default("{}")
