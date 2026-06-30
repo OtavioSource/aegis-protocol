@@ -4,7 +4,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": ["NEXTAUTH_SECRET", "NEXTAUTH_URL", "AEGIS_API_URL", "AEGIS_API_KEY"]
     },
     "dev": {
       "cache": false,
@@ -22,6 +23,10 @@
     },
     "clean": {
       "cache": false
+    },
+    "e2e": {
+      "cache": false,
+      "outputs": ["evidence/**"]
     }
   }
 }

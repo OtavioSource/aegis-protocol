@@ -1,0 +1,6 @@
+node_modules/
+evidence/test-results/
+evidence/playwright-report/
+evidence/videos/
+evidence/traces/
+evidence/.auth/
