@@ -282,7 +282,8 @@ const fiatRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // ----- POST /v1/fiat/withdrawals (off-ramp Etherfuse) -----
   app.post('/v1/fiat/withdrawals', async (request, reply) => {
-    const caller = request.requireAuth();
+    // Off-ramp move fundos para fora — ação privativa de humano (não agente).
+    const caller = request.requireUser();
     const body = InitiateWithdrawalBody.parse(request.body ?? {});
 
     const owner = await app.prisma.user.findFirst({

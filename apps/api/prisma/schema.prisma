@@ -307,6 +307,10 @@ model SpendRequest {
   sorobanEventTxHash String? @db.VarChar(128)
   executedAt         DateTime?
   failureReason      String? @db.Text
+  /// Anti-replay do comprovante x402: setado quando o txHash é resgatado com
+  /// sucesso em POST /v1/x402/verify. NULL = ainda não consumido. Uma prova só
+  /// pode ser resgatada uma vez (o ledger é público → txHash não é segredo).
+  x402RedeemedAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

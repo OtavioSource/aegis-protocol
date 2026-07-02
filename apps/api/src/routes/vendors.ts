@@ -41,13 +41,25 @@ const PatchVendorBody = z.object({
   status: z.nativeEnum(VendorStatus).optional(),
 });
 
+/**
+ * Campos públicos da VendorWallet expostos pela API. NUNCA inclui
+ * `secretKeyEncrypted` (ciphertext da secret key custodial) nem `signMode`.
+ */
+const VENDOR_WALLET_PUBLIC_SELECT = {
+  id: true,
+  publicKey: true,
+  status: true,
+  isPrimary: true,
+  chain: true,
+} as const;
+
 const vendorsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   // ----- LIST -----
   app.get('/v1/vendors', async (request) => {
     const caller = request.requireAuth();
     const vendors = await app.prisma.vendor.findMany({
       where: { companyId: caller.companyId },
-      include: { wallets: { where: { isPrimary: true } } },
+      include: { wallets: { where: { isPrimary: true }, select: VENDOR_WALLET_PUBLIC_SELECT } },
       orderBy: { createdAt: 'desc' },
     });
     return { data: vendors };
@@ -58,7 +70,7 @@ const vendorsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     const caller = request.requireAuth();
     const found = await app.prisma.vendor.findFirst({
       where: { id: request.params.id, companyId: caller.companyId },
-      include: { wallets: true },
+      include: { wallets: { select: VENDOR_WALLET_PUBLIC_SELECT } },
     });
     if (!found) throw new NotFoundError(`Vendor ${request.params.id} not found`);
     return found;

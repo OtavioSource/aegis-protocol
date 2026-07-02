@@ -21,8 +21,12 @@ const LoginBody = z.object({
 });
 
 const authRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
-  app.post('/v1/auth/login', async (request) => {
-    const body = LoginBody.parse(request.body);
+  app.post(
+    '/v1/auth/login',
+    // Limite estrito por IP contra brute-force de senha (bcrypt é caro).
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request) => {
+      const body = LoginBody.parse(request.body);
 
     const user = await app.prisma.user.findUnique({
       where: { email: body.email.toLowerCase() },

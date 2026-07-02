@@ -43,6 +43,10 @@ export async function buildApp(): Promise<FastifyInstance> {
               options: { translateTime: 'SYS:HH:MM:ss.l', ignore: 'pid,hostname' },
             },
     },
+    // Atrás de proxy/LB (Vercel), usa X-Forwarded-For para o IP real do cliente.
+    // Sem isso, o fallback de rate-limit por IP vira um único bucket global
+    // (o IP do proxy). Deploy roda sempre atrás de proxy confiável.
+    trustProxy: true,
     // Respeita um `x-request-id` recebido do cliente (rastreio end-to-end);
     // gera um UUID novo caso o header esteja ausente.
     genReqId: (req) => {

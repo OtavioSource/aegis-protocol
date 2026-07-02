@@ -21,7 +21,7 @@ import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastif
 import fp from 'fastify-plugin';
 import { LRUCache } from 'lru-cache';
 
-import { UnauthorizedError } from '../lib/errors.js';
+import { ForbiddenError, UnauthorizedError } from '../lib/errors.js';
 import { verifySessionToken, type VerifiedSession } from '../lib/session-token.js';
 
 const API_KEY_PREFIX_LENGTH = 11; // "cr_" + 8 chars
@@ -55,6 +55,13 @@ declare module 'fastify' {
      * Usar nas rotas de gestão do dashboard (não precisam da identidade do agente).
      */
     requireAuth(): { companyId: string };
+    /**
+     * Exige auth de **usuário humano** (session token do dashboard). Lança 403 se
+     * o caller for um agente (`Bearer cr_`) e 401 se não houver auth. Usar em ações
+     * administrativas/sensíveis: aprovações, gestão de policy/agente, off-ramp fiat
+     * — impede que uma API key de agente aprove o próprio gasto ou altere policies.
+     */
+    requireUser(): VerifiedSession;
   }
 }
 
@@ -90,6 +97,16 @@ const authAgentPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       );
     }
     return { companyId: this.companyId };
+  });
+  app.decorateRequest('requireUser', function (this: FastifyRequest): VerifiedSession {
+    if (this.user) return this.user;
+    // Autenticado como agente, mas a ação é privativa de humano → 403.
+    if (this.agent) {
+      throw new ForbiddenError(
+        'This action requires a human user session; agent API keys cannot perform it.',
+      );
+    }
+    throw new UnauthorizedError('Authentication required (session token)');
   });
 
   app.addHook('preHandler', async (request) => {

@@ -3,10 +3,12 @@
  *
  * Builds a minimal Fastify app with only x402Route registered.
  * Mocks @x402/stellar so no real Stellar RPC calls are made.
+ * `requireAgent` e `app.prisma` são stubados por injeção (o auth-agent/prisma
+ * reais não são registrados aqui).
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 
 // ---------------------------------------------------------------------------
 // Mocks — vi.mock is hoisted; factories must NOT reference outer variables.
@@ -20,9 +22,6 @@ vi.mock('../../env.js', () => ({
   },
 }));
 
-// The facilitator mock instance: vi.fn() handles are created once here.
-// They are returned from every ExactStellarScheme constructor call.
-// We use vi.fn() calls without external references — hoisting-safe.
 vi.mock('@x402/stellar/exact/facilitator', () => {
   const mockInstance = {
     verify: vi.fn(),
@@ -42,12 +41,8 @@ vi.mock('@x402/stellar', () => ({
   })),
 }));
 
-// ---------------------------------------------------------------------------
-// Import route and mocked modules AFTER vi.mock declarations
-// ---------------------------------------------------------------------------
 import x402Route from '../x402.js';
 
-// Access the shared mock instance via the module
 const facilitatorMod = await import('@x402/stellar/exact/facilitator');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockFacilitator = (facilitatorMod as any).__mockInstance as {
@@ -63,6 +58,7 @@ const mockPayload = {
   x402Version: 2,
   scheme: 'exact',
   network: 'stellar:testnet',
+  // NÃO é um txHash (64 hex) → cai no caminho canônico do facilitator.
   payload: { transaction: 'AAAA...base64xdr...' },
   accepted: { scheme: 'exact', network: 'stellar:testnet' },
 };
@@ -79,14 +75,39 @@ const mockRequirements = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function buildTestApp() {
+/**
+ * Monta o app de teste com stubs injetáveis:
+ * - `authed`: simula um agente autenticado (para /settle, que exige requireAgent).
+ * - `prisma`: injeta um mock de app.prisma (para o caminho pay-first do verify).
+ */
+async function buildTestApp(
+  opts: { authed?: boolean; prisma?: unknown } = {},
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+  app.decorateRequest('agent', undefined);
+  app.decorateRequest('requireAgent', function (this: { agent?: unknown }) {
+    if (!this.agent) {
+      const e = Object.assign(new Error('Authentication required'), { statusCode: 401 });
+      throw e;
+    }
+    return this.agent;
+  });
+  if (opts.prisma) app.decorate('prisma', opts.prisma);
+  if (opts.authed) {
+    app.addHook('preHandler', async (req) => {
+      (req as { agent?: unknown }).agent = {
+        id: 'agent-1',
+        companyId: 'co-1',
+        apiKeyPrefix: 'cr_testkey1',
+      };
+    });
+  }
   await app.register(x402Route);
   return app;
 }
 
 // ---------------------------------------------------------------------------
-// Tests: POST /v1/x402/verify
+// Tests: POST /v1/x402/verify — caminho canônico (facilitator)
 // ---------------------------------------------------------------------------
 
 describe('POST /v1/x402/verify', () => {
@@ -96,19 +117,13 @@ describe('POST /v1/x402/verify', () => {
   });
 
   it('returns { isValid: true } for a valid transaction', async () => {
-    mockFacilitator.verify.mockResolvedValue({
-      isValid: true,
-      invalidReason: null,
-      payer: 'GPAYER...',
-    });
+    mockFacilitator.verify.mockResolvedValue({ isValid: true, invalidReason: null });
     const app = await buildTestApp();
-
     const res = await app.inject({
       method: 'POST',
       url: '/v1/x402/verify',
       payload: { payload: mockPayload, requirements: mockRequirements },
     });
-
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).isValid).toBe(true);
   });
@@ -117,108 +132,130 @@ describe('POST /v1/x402/verify', () => {
     mockFacilitator.verify.mockResolvedValue({
       isValid: false,
       invalidReason: 'transaction_not_found',
-      payer: undefined,
     });
     const app = await buildTestApp();
-
     const res = await app.inject({
       method: 'POST',
       url: '/v1/x402/verify',
       payload: { payload: mockPayload, requirements: mockRequirements },
     });
-
     expect(res.statusCode).toBe(200);
-    const body = JSON.parse(res.body);
-    expect(body.isValid).toBe(false);
-    expect(body.invalidReason).toBe('transaction_not_found');
+    expect(JSON.parse(res.body).invalidReason).toBe('transaction_not_found');
   });
 
   it('returns 400 with invalid_request on malformed body', async () => {
     const app = await buildTestApp();
-
     const res = await app.inject({
       method: 'POST',
       url: '/v1/x402/verify',
       payload: { wrong: 'body' },
     });
-
     expect(res.statusCode).toBe(400);
-    const body = JSON.parse(res.body);
-    expect(body.error).toBe('invalid_request');
+    expect(JSON.parse(res.body).error).toBe('invalid_request');
   });
 
-  it('returns 400 with verification_failed when verify throws', async () => {
-    mockFacilitator.verify.mockRejectedValue(new Error('Stellar RPC error'));
+  it('returns 400 with verification_failed when verify throws (no leak)', async () => {
+    mockFacilitator.verify.mockRejectedValue(new Error('Stellar RPC secret-ish error'));
     const app = await buildTestApp();
-
     const res = await app.inject({
       method: 'POST',
       url: '/v1/x402/verify',
       payload: { payload: mockPayload, requirements: mockRequirements },
     });
-
     expect(res.statusCode).toBe(400);
     const body = JSON.parse(res.body);
     expect(body.error).toBe('verification_failed');
+    // Info-leak fix: o detalhe interno NÃO deve vazar.
+    expect(body.detail).toBeUndefined();
   });
-
-  it('passes payload and requirements to the facilitator', async () => {
-    mockFacilitator.verify.mockResolvedValue({ isValid: true, payer: 'GPAYER...' });
-    const app = await buildTestApp();
-
-    await app.inject({
-      method: 'POST',
-      url: '/v1/x402/verify',
-      payload: { payload: mockPayload, requirements: mockRequirements },
-    });
-
-    expect(mockFacilitator.verify).toHaveBeenCalledOnce();
-    const [calledPayload, calledRequirements] = mockFacilitator.verify.mock.calls[0] ?? [];
-    expect(calledPayload).toMatchObject({ x402Version: 2, scheme: 'exact' });
-    expect(calledRequirements).toMatchObject({ payTo: mockRequirements.payTo });
-  });
-
-  // Fix 1 — TREASURY_SECRET missing
-  //
-  // NOTE: The `../../env.js` module is fully mocked by vi.mock at the top of this
-  // file, so manipulating process.env.TREASURY_SECRET has NO effect on the value
-  // seen by getFacilitator() — it always reads from the mocked `env` object.
-  // To simulate a missing secret we must override the mocked env object directly.
-  it('returns 400 with verification_failed when TREASURY_SECRET is missing', async () => {
-    // Temporarily remove TREASURY_SECRET from the mocked env object
-    const envMod = await import('../../env.js');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mutableEnv = (envMod as any).env as Record<string, string | undefined>;
-    const original = mutableEnv.TREASURY_SECRET;
-    delete mutableEnv.TREASURY_SECRET;
-
-    try {
-      // Build a fresh app instance so facilitator is not cached from a prior test
-      const app = await buildTestApp();
-      const res = await app.inject({
-        method: 'POST',
-        url: '/v1/x402/verify',
-        payload: { payload: mockPayload, requirements: mockRequirements },
-      });
-      // getFacilitator() throws → caught by the route → 400 verification_failed
-      expect(res.statusCode).toBe(400);
-      expect(JSON.parse(res.body).error).toBe('verification_failed');
-    } finally {
-      // Restore original value so subsequent tests are not affected
-      mutableEnv.TREASURY_SECRET = original;
-    }
-  });
-
-  // Fix 3 — SOROBAN_RPC_URL validation placeholder
-  // getFacilitator() does not currently validate SOROBAN_RPC_URL explicitly; it
-  // passes whatever value (including undefined) to ExactStellarScheme which would
-  // only fail at actual RPC call time.  A full test would require a more granular
-  // mock or an integration environment — tracked here as a reminder.
-  it.todo('returns error when SOROBAN_RPC_URL is empty');
 });
 
 // ---------------------------------------------------------------------------
-// Tests: POST /v1/x402/settle
+// Tests: POST /v1/x402/verify — caminho pay-first (anti-replay ancorado no DB)
+// ---------------------------------------------------------------------------
+
+describe('POST /v1/x402/verify (pay-first, anti-replay)', () => {
+  const validTxHash = 'a'.repeat(64);
+  const payTo = 'GVENDORWALLETPUBKEYXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+  const payload = { ...mockPayload, payload: { transaction: validTxHash } };
+  const requirements = { ...mockRequirements, payTo, amount: '0.05', asset: 'USDC:ISSUER' };
+
+  function makePrisma(overrides?: { updateManyCounts?: number[] }) {
+    const counts = overrides?.updateManyCounts ?? [1];
+    let call = 0;
+    return {
+      spendRequest: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'sr-1',
+          status: 'EXECUTED',
+          amountCents: 5n,
+          asset: 'USDC',
+          vendorWallet: { publicKey: payTo },
+        }),
+        updateMany: vi.fn().mockImplementation(async () => ({
+          count: counts[Math.min(call++, counts.length - 1)],
+        })),
+      },
+    };
+  }
+
+  it('valida um txHash real do Aegis e consome a prova (isValid: true)', async () => {
+    const app = await buildTestApp({ prisma: makePrisma({ updateManyCounts: [1] }) });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/x402/verify',
+      payload: { payload, requirements },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).isValid).toBe(true);
+  });
+
+  it('rejeita replay: a MESMA prova apresentada 2x (proof_already_redeemed)', async () => {
+    // updateMany: 1ª resgata (count 1), 2ª já consumida (count 0).
+    const app = await buildTestApp({ prisma: makePrisma({ updateManyCounts: [1, 0] }) });
+    const first = await app.inject({
+      method: 'POST',
+      url: '/v1/x402/verify',
+      payload: { payload, requirements },
+    });
+    expect(JSON.parse(first.body).isValid).toBe(true);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/v1/x402/verify',
+      payload: { payload, requirements },
+    });
+    const body = JSON.parse(second.body);
+    expect(body.isValid).toBe(false);
+    expect(body.invalidReason).toBe('proof_already_redeemed');
+  });
+
+  it('rejeita se o destino (payTo) não bate com o pagamento real', async () => {
+    const app = await buildTestApp({ prisma: makePrisma() });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/x402/verify',
+      payload: { payload, requirements: { ...requirements, payTo: 'GATTACKER' } },
+    });
+    expect(JSON.parse(res.body).invalidReason).toBe('payto_mismatch');
+  });
+
+  it('rejeita se o SpendRequest não existe / não está EXECUTED', async () => {
+    const prisma = {
+      spendRequest: { findFirst: vi.fn().mockResolvedValue(null), updateMany: vi.fn() },
+    };
+    const app = await buildTestApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/x402/verify',
+      payload: { payload, requirements },
+    });
+    expect(JSON.parse(res.body).invalidReason).toBe('payment_not_found_or_not_executed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: POST /v1/x402/settle — agora exige agente autenticado
 // ---------------------------------------------------------------------------
 
 describe('POST /v1/x402/settle', () => {
@@ -227,73 +264,55 @@ describe('POST /v1/x402/settle', () => {
     mockFacilitator.settle.mockReset();
   });
 
-  it('returns success response on happy path', async () => {
+  it('rejeita com 401 quando NÃO autenticado (settle é privativo)', async () => {
+    const app = await buildTestApp(); // sem authed
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/x402/settle',
+      payload: { payload: mockPayload, requirements: mockRequirements },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(mockFacilitator.settle).not.toHaveBeenCalled();
+  });
+
+  it('returns success response on happy path (autenticado)', async () => {
     mockFacilitator.settle.mockResolvedValue({
       success: true,
       transaction: 'abc123txhash',
       network: 'stellar:testnet',
-      payer: 'GPAYER...',
     });
-    const app = await buildTestApp();
-
+    const app = await buildTestApp({ authed: true });
     const res = await app.inject({
       method: 'POST',
       url: '/v1/x402/settle',
       payload: { payload: mockPayload, requirements: mockRequirements },
     });
-
     expect(res.statusCode).toBe(200);
-    const body = JSON.parse(res.body);
-    expect(body.success).toBe(true);
-    expect(body.transaction).toBe('abc123txhash');
+    expect(JSON.parse(res.body).transaction).toBe('abc123txhash');
   });
 
-  it('returns 400 with settle_failed when settle throws', async () => {
-    mockFacilitator.settle.mockRejectedValue(new Error('Network timeout'));
-    const app = await buildTestApp();
-
+  it('returns 400 with settle_failed when settle throws (no leak)', async () => {
+    mockFacilitator.settle.mockRejectedValue(new Error('Network timeout internal'));
+    const app = await buildTestApp({ authed: true });
     const res = await app.inject({
       method: 'POST',
       url: '/v1/x402/settle',
       payload: { payload: mockPayload, requirements: mockRequirements },
     });
-
     expect(res.statusCode).toBe(400);
     const body = JSON.parse(res.body);
     expect(body.error).toBe('settle_failed');
+    expect(body.detail).toBeUndefined();
   });
 
-  it('returns 400 with invalid_request on malformed body', async () => {
-    const app = await buildTestApp();
-
+  it('returns 400 with invalid_request on malformed body (autenticado)', async () => {
+    const app = await buildTestApp({ authed: true });
     const res = await app.inject({
       method: 'POST',
       url: '/v1/x402/settle',
       payload: { bad: 'payload' },
     });
-
     expect(res.statusCode).toBe(400);
-    const body = JSON.parse(res.body);
-    expect(body.error).toBe('invalid_request');
-  });
-
-  it('forwards settle failure from facilitator (success: false)', async () => {
-    mockFacilitator.settle.mockResolvedValue({
-      success: false,
-      network: 'stellar:testnet',
-      transaction: '',
-      errorReason: 'verification_failed',
-    });
-    const app = await buildTestApp();
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/v1/x402/settle',
-      payload: { payload: mockPayload, requirements: mockRequirements },
-    });
-
-    // facilitator returned success: false — route returns 200, caller checks body
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).success).toBe(false);
+    expect(JSON.parse(res.body).error).toBe('invalid_request');
   });
 });

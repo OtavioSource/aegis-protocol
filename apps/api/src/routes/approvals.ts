@@ -27,15 +27,14 @@ const approvalsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post<{ Params: { spendRequestId: string } }>(
     '/v1/approvals/:spendRequestId',
     async (request) => {
-      const { companyId } = request.requireAuth();
+      // Aprovação é privativa de HUMANO: um agente NÃO pode aprovar (nem o
+      // próprio spend escalado). requireUser lança 403 se o caller for agente.
+      const user = request.requireUser();
+      const companyId = user.companyId;
       const body = ApprovalBody.parse(request.body);
 
-      // Aprovador + actor: o User logado (dashboard) quando presente; senão,
-      // fallback ao primeiro OWNER da Company (caller é agente, sem User direto).
-      const approverUserId = request.user?.sub ?? (await resolveApproverUserId(app, companyId));
-      const actor = request.user
-        ? `user:${request.user.sub}`
-        : `agent:${request.agent?.id ?? 'system'}`;
+      const approverUserId = user.sub;
+      const actor = `user:${user.sub}`;
 
       const sr = await app.prisma.spendRequest.findFirst({
         where: {
@@ -130,26 +129,5 @@ const approvalsRoute: FastifyPluginAsync = async (app: FastifyInstance) => {
     };
   });
 };
-
-/**
- * Resolve um userId válido para a FK de Approval no MVP. Como Agent
- * autenticado não tem User direto (RBAC humano vem na iter 10), usamos o
- * primeiro User OWNER da Company como aprovador "system" temporário.
- */
-async function resolveApproverUserId(
-  app: FastifyInstance,
-  companyId: string,
-): Promise<string> {
-  const owner = await app.prisma.user.findFirst({
-    where: { companyId, role: 'OWNER' },
-    orderBy: { createdAt: 'asc' },
-  });
-  if (!owner) {
-    throw new ConflictError(
-      `No OWNER user found for Company ${companyId}. Cannot create Approval without an approver.`,
-    );
-  }
-  return owner.id;
-}
 
 export default approvalsRoute;

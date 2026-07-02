@@ -18,10 +18,13 @@ const rateLimitPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   await app.register(rateLimit, {
     max: env.RATE_LIMIT_PER_AGENT_RPS * 60, // por minuto
     timeWindow: '1 minute',
+    // preHandler (não onRequest): roda DEPOIS do auth-agent popular `req.agent`,
+    // senão o keyGenerator nunca enxerga o agente e tudo cai no bucket por IP.
+    hook: 'preHandler',
     keyGenerator: (req) => {
       // Agent autenticado: usa apiKeyPrefix (estável por Agent)
       if (req.agent) return `agent:${req.agent.apiKeyPrefix}`;
-      // Fallback: IP do cliente
+      // Fallback: IP do cliente (agora correto via trustProxy)
       return `ip:${req.ip}`;
     },
     errorResponseBuilder: (_req, ctx) => ({
