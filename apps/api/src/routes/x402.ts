@@ -19,6 +19,7 @@
  * PUBLIC — sem auth de agente. Vendors chamam server-side. Rate-limited global.
  */
 
+import { SpendRequestStatus } from '@prisma/client';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
@@ -64,50 +65,56 @@ const BodySchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Aegis "pay-first" verification helper
+// Aegis "pay-first" verification helper (anti-replay ancorado no banco)
 // ---------------------------------------------------------------------------
 // O pagamento governado já foi liquidado on-chain pelo fluxo não-custodial de
 // duas fases (spend-request → cosign), que devolveu um txHash ao agente. O
-// X-PAYMENT carrega apenas esse txHash de uma tx já submetida — o `@x402/stellar`
-// facilitator canônico não valida isso (espera uma tx ainda não submetida).
-// Aqui, verificamos direto no Horizon que o pagamento on-chain bate com os
-// requirements (agnóstico a multisig — confere destino/asset/valor).
+// X-PAYMENT carrega apenas esse txHash.
+//
+// NÃO validamos só lendo o ledger: o ledger é PÚBLICO — qualquer um leria um
+// pagamento histórico ao payTo do vendor e reapresentaria o txHash (replay/forja).
+// A fonte de verdade é o BANCO: o txHash tem que corresponder a um SpendRequest
+// EXECUTED deste vendor/valor/asset, e a prova é CONSUMIDA atomicamente (uma vez).
 
-async function verifyOnChainPayment(
-  horizonUrl: string,
+async function verifyAndRedeemAegisPayment(
+  app: FastifyInstance,
   txHash: string,
   requirements: { asset: string; amount: string; payTo: string },
 ): Promise<{ isValid: boolean; invalidReason?: string }> {
-  try {
-    const txRes = await fetch(`${horizonUrl}/transactions/${txHash}`);
-    if (!txRes.ok) return { isValid: false, invalidReason: 'transaction_not_found' };
-    const tx = (await txRes.json()) as { successful?: boolean };
-    if (!tx.successful) return { isValid: false, invalidReason: 'transaction_failed' };
-
-    const opsRes = await fetch(`${horizonUrl}/transactions/${txHash}/operations`);
-    if (!opsRes.ok) return { isValid: false, invalidReason: 'operations_not_found' };
-    const opsData = (await opsRes.json()) as {
-      _embedded?: { records?: Array<Record<string, unknown>> };
-    };
-    const ops = opsData._embedded?.records ?? [];
-
-    const [assetCode, assetIssuer] = requirements.asset.split(':');
-    const expectedStroops = Math.round(parseFloat(requirements.amount) * 1e7);
-
-    const op = ops.find((o) => {
-      if (o.type !== 'payment') return false;
-      if (o.to !== requirements.payTo) return false;
-      if (o.asset_code !== assetCode) return false;
-      if (o.asset_issuer !== assetIssuer) return false;
-      const actualStroops = Math.round(parseFloat((o.amount as string) ?? '0') * 1e7);
-      return actualStroops === expectedStroops;
-    });
-
-    if (!op) return { isValid: false, invalidReason: 'no_matching_payment_op' };
-    return { isValid: true };
-  } catch (err) {
-    return { isValid: false, invalidReason: `horizon_error: ${String(err)}` };
+  const sr = await app.prisma.spendRequest.findFirst({
+    where: { txHash },
+    include: { vendorWallet: true },
+  });
+  if (!sr || sr.status !== SpendRequestStatus.EXECUTED) {
+    return { isValid: false, invalidReason: 'payment_not_found_or_not_executed' };
   }
+
+  const assetCode = requirements.asset.includes(':')
+    ? requirements.asset.split(':')[0]
+    : requirements.asset;
+  const expectedCents = Math.round(parseFloat(requirements.amount) * 100);
+
+  // Vínculo: destino/valor/asset da fatura têm que bater com o pagamento real.
+  if (sr.vendorWallet?.publicKey !== requirements.payTo) {
+    return { isValid: false, invalidReason: 'payto_mismatch' };
+  }
+  if (Number(sr.amountCents) !== expectedCents) {
+    return { isValid: false, invalidReason: 'amount_mismatch' };
+  }
+  if (sr.asset !== assetCode) {
+    return { isValid: false, invalidReason: 'asset_mismatch' };
+  }
+
+  // Anti-replay: consome a prova atomicamente (o filtro x402RedeemedAt=null +
+  // updateMany garante que corridas concorrentes só resgatem uma vez).
+  const claimed = await app.prisma.spendRequest.updateMany({
+    where: { id: sr.id, x402RedeemedAt: null },
+    data: { x402RedeemedAt: new Date() },
+  });
+  if (claimed.count === 0) {
+    return { isValid: false, invalidReason: 'proof_already_redeemed' };
+  }
+  return { isValid: true };
 }
 
 function extractAegisTxHash(payload: unknown): string | null {
@@ -162,14 +169,10 @@ const x402Route: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
 
     // Aegis "pay-first" path: payload carrega o txHash de uma tx já liquidada
-    // pelo próprio Aegis — verifica direto no Horizon.
+    // pelo próprio Aegis — valida contra o banco + consome a prova (anti-replay).
     const aegisTxHash = extractAegisTxHash(body.payload);
     if (aegisTxHash) {
-      const result = await verifyOnChainPayment(env.STELLAR_HORIZON_URL, aegisTxHash, {
-        asset: body.requirements.asset,
-        amount: body.requirements.amount,
-        payTo: body.requirements.payTo,
-      });
+      const result = await verifyAndRedeemAegisPayment(app, aegisTxHash, body.requirements);
       return reply.send(result);
     }
 
@@ -180,8 +183,9 @@ const x402Route: FastifyPluginAsync = async (app: FastifyInstance) => {
       const result = await fac.verify(body.payload as any, body.requirements as any);
       return reply.send(result);
     } catch (err) {
+      // Endpoint público: não devolver String(err) (vaza Horizon/RPC/SDK internals).
       app.log.error({ err }, 'x402 verify error');
-      return reply.code(400).send({ error: 'verification_failed', detail: String(err) });
+      return reply.code(400).send({ error: 'verification_failed' });
     }
   });
 
@@ -189,6 +193,10 @@ const x402Route: FastifyPluginAsync = async (app: FastifyInstance) => {
   // POST /v1/x402/settle
   // -------------------------------------------------------------------------
   app.post('/v1/x402/settle', async (request, reply) => {
+    // settle assina/submete com a chave operacional da treasury — NÃO pode ser
+    // público (griefing/gasto de fee). Exige agente autenticado da plataforma.
+    request.requireAgent();
+
     let body: z.infer<typeof BodySchema>;
     try {
       body = BodySchema.parse(request.body);
@@ -196,7 +204,7 @@ const x402Route: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (err instanceof z.ZodError) {
         return reply.code(400).send({ error: 'invalid_request', detail: err.issues });
       }
-      return reply.code(400).send({ error: 'invalid_request', detail: String(err) });
+      return reply.code(400).send({ error: 'invalid_request' });
     }
 
     try {
@@ -206,7 +214,7 @@ const x402Route: FastifyPluginAsync = async (app: FastifyInstance) => {
       return reply.send(result);
     } catch (err) {
       app.log.error({ err }, 'x402 settle error');
-      return reply.code(400).send({ error: 'settle_failed', detail: String(err) });
+      return reply.code(400).send({ error: 'settle_failed' });
     }
   });
 };

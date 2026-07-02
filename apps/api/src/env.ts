@@ -71,21 +71,44 @@ const EnvSchema = z.object({
   AUDIT_CONTRACT_ID: z.string().optional(),
 
   // Auth / Web
+  // NEXTAUTH_SECRET é consumido pelo dashboard (apps/web), não pela API — a
+  // validação de força dele pertence ao web. Aqui é só declarado (opcional).
   NEXTAUTH_SECRET: z.string().optional(),
   NEXTAUTH_URL: z.string().url().optional(),
   /**
    * Secret para assinar/verificar o session token do dashboard (humano).
    * Só a API usa (emite no login, valida nas rotas). Sem ele, o login do
-   * dashboard falha ao emitir token. Gerar com:
+   * dashboard falha ao emitir token. Assina claims companyId/role — se fraco,
+   * um atacante minta sessões para qualquer tenant. Gerar com:
    *   node -e "console.log(crypto.randomBytes(32).toString('hex'))"
    */
-  SESSION_JWT_SECRET: z.string().optional(),
+  SESSION_JWT_SECRET: z.string().min(32, 'SESSION_JWT_SECRET must be ≥ 32 chars').optional(),
 
   // Tuning
   SEP24_POLLING_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
   SEP24_JWT_TTL_SECONDS: z.coerce.number().int().positive().default(82_800),
   RATE_LIMIT_PER_AGENT_RPS: z.coerce.number().int().positive().default(10),
   IDEMPOTENCY_KEY_TTL_DAYS: z.coerce.number().int().positive().default(7),
+}).superRefine((e, ctx) => {
+  // Em produção, os segredos críticos deixam de ser opcionais: sem eles a auth
+  // ou a custódia rodam num modo inseguro/quebrado. Falha-fast no boot.
+  if (e.NODE_ENV !== 'production') return;
+  // Segredos que a API de fato consome — obrigatórios em produção.
+  const required = [
+    'SESSION_JWT_SECRET',
+    'AEGIS_SIGNER_ROOT_SECRET',
+    'VENDOR_KEY_ENCRYPTION_KEY',
+    'TREASURY_SECRET',
+  ] as const;
+  for (const key of required) {
+    if (!e[key]) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: `${key} is required when NODE_ENV=production`,
+      });
+    }
+  }
 });
 
 export type Env = z.infer<typeof EnvSchema>;
